@@ -16,7 +16,10 @@
 :root[data-theme="dark"] {
   --bg: #12171c; --surface: #1b232b; --fg: #e4eaf0; --muted: #94a3b1; --line: #2e3a46;
   --accent: #6fb3e0; --accent-fg: #0d1b26; --mark: #ffd84d; --mark-line: #ffc400; --stage: #0b0f13; color-scheme: dark }
+[hidden] { display: none !important; }
 html, body { height: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
 body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 15px; }
 .wrap { max-width: 960px; margin: 0 auto; padding-block: 12px 32px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));

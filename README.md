@@ -15,7 +15,8 @@
 | 파일 | 내용 |
 |---|---|
 | `viewer.src.html` | 화면 원본 (`__BUNDLE__`, `__SAMPLE_B64__` 자리) |
-| `index.html` | 만들어진 결과 (`python tools/build.py`) — 배포되는 페이지 |
+| `index.html` | 만들어진 완전한 페이지 (`python tools/build.py`) — GitHub Pages 배포 |
+| `artifact.html` | 같은 내용의 본문 조각 — claude.ai Artifact 용 |
 | `vendor/pptx-browser-4.1.5/` | 오픈소스 렌더러 사본 (MIT). 버그 2곳 수정 — `PATCH.md` |
 | `vendor/pptx-browser.bundle.js` | 위 사본을 esbuild 로 묶은 것 (전역 `PPTX`) |
 | `tools/search.mjs` | 화면 없이 찾기 (에이전트·시험용) |
