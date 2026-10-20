@@ -1,0 +1,15 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#16181c}#host{position:fixed;inset:0}</style></head>
+<body><div id="host"></div>
+<script src="../../../vendor/pptx-vanilla-viewer.bundle.js"></script>
+<script>
+window.__log = [];
+window.makeViewer = (opts) => {
+  window.v?.destroy?.();
+  window.v = PVV.createPptxViewer(document.getElementById('host'), Object.assign({
+    theme: PVV.vermilionDarkTheme, editable: false, autosave: false, showCompatibilityToasts: false,
+    onLoad: (x) => __log.push(['load', x.slideCount]), onError: (m) => __log.push(['error', String(m)]),
+  }, opts));
+  return true;
+};
+</script></body></html>

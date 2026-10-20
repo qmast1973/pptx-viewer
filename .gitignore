@@ -1,0 +1,3 @@
+# 빌드 전용 (npm install 로 다시 만들 수 있음)
+tools/vv/node_modules/
+tools/vv/meta.json

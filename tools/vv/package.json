@@ -1,0 +1,12 @@
+{
+  "name": "pptx-viewer-vv-build",
+  "private": true,
+  "description": "pptx-vanilla-viewer(Apache-2.0)를 한 파일로 묶기 위한 빌드 전용 폴더 (node_modules 는 git 에 올리지 않음)",
+  "dependencies": {
+    "pptx-vanilla-viewer": "3.42.0",
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "esbuild": "0.20.2"
+  }
+}
