@@ -7,7 +7,9 @@
 - 로컬: `index.html` 을 브라우저로 바로 열어도 동작 (렌더러를 페이지 안에 묶어 넣어 인터넷 없이도 열림)
 
 ## 기능
-- 파일 열기(.pptx 만), 이전/다음, 좌우 밀기, 키보드 ←/→
+- 파일 열기(고르는 창에 .pptx 만 표시), 이전/다음, 좌우 밀기, 키보드 ←/→
+- 확대·축소(100~500%): －/＋/맞춤 버튼, 두 손가락 벌리기, Ctrl+휠, +/−/0 키. 확대하면 슬라이드 칸 안에서 밀어 보고, 좌우 밀기 쪽 넘김은 100%일 때만
+- 전체화면: 버튼 또는 F 키. 브라우저 전체화면이 안 되는 폰(아이폰 등)은 화면을 덮는 방식으로 대신하고 Esc·버튼으로 끝
 - 찾기: 대소문자 무시, 띄어쓰기는 그대로. 결과 목록(쪽 번호·제목·찾은 문단)을 누르면 그 슬라이드로 이동, '이전/다음 결과'
 - 찾은 글상자 표시: 슬라이드 XML 에 위치가 적힌 글상자만 (레이아웃에서 위치를 물려받는 자리표시자·그룹 안 글상자는 목록에만 나옴)
 
@@ -28,7 +30,7 @@ node tools\search.mjs <파일.pptx> <찾을말>          # JSON: {slides, hits:[
 npx -y esbuild@0.20.2 tools/entry.js --bundle --format=iife --global-name=PPTX --minify --outfile=vendor/pptx-browser.bundle.js   # 렌더러 수정 후
 python tools\build.py                               # index.html 다시 만들기
 ```
-페이지 안 조작(헤드리스 시험용): `window.pptxViewer.open(Uint8Array, 이름)`, `.search("말")`, `.go(번호0부터)`, `.state`.
+페이지 안 조작(헤드리스 시험용): `window.pptxViewer.open(Uint8Array, 이름)`, `.search("말")`, `.go(번호0부터)`, `.setZoom(배율)`, `.toggleFull()`, `.state`({slide, count, query, hits, zoom, full}).
 
 ## 확인한 것 (2026-10-20, 헤드리스 Edge 400px 폭)
 - 예시 4장: "매출" → 1·2·4쪽, 2쪽 글상자 3개 표시, 결과 없음 문구, 가로 스크롤 없음

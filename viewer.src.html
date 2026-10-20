@@ -37,8 +37,19 @@ button:disabled { opacity: .45; cursor: default; }
 .search { display: flex; gap: 8px; }
 .search input { flex: 1; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--surface); color: var(--fg); min-height: 42px; }
-.stage { background: var(--stage); border-radius: 10px; padding: 8px; position: relative; touch-action: pan-y; }
-.slide { position: relative; margin: 0 auto; max-width: 100%; }
+.viewer { display: flex; flex-direction: column; gap: 10px; }
+/* 슬라이드 칸: 확대하면 칸 안에서 위아래·좌우로 밀어 본다. 두 손가락 확대는 페이지 대신 슬라이드만 (직접 처리) */
+.stage { background: var(--stage); border-radius: 10px; padding: 8px; position: relative; overflow: auto;
+  touch-action: pan-x pan-y; overscroll-behavior: contain; }
+.slide { position: relative; margin: 0 auto; }
+.zoombar { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.zoombar .count { min-width: 4.2em; text-align: center; }
+/* 전체화면: 브라우저 전체화면(:fullscreen) 또는 지원 안 되는 폰(아이폰 등)에서는 화면을 덮는 방식(.full) */
+.viewer:fullscreen, .viewer.full { position: fixed; inset: 0; z-index: 50; background: var(--stage); gap: 8px;
+  padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+.viewer:fullscreen .stage, .viewer.full .stage { flex: 1; min-height: 0; border-radius: 0; padding: 0; display: flex; }
+.viewer:fullscreen .slide, .viewer.full .slide { margin: auto; flex-shrink: 0; }
+.viewer:fullscreen .count, .viewer.full .count { color: #c9d3dc; }
 .slide canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 3px; }
 .hit { position: absolute; border: 3px solid var(--mark-line); background: color-mix(in srgb, var(--mark) 30%, transparent);
   border-radius: 4px; pointer-events: none; }
@@ -73,20 +84,29 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
     <input id="q" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search">
     <button class="primary" type="submit">찾기</button>
   </form>
-  <div class="stage" id="stage">
-    <div class="slide" id="slide"><canvas id="cv" width="1280" height="720" aria-label="슬라이드"></canvas></div>
-    <div class="status" id="status">불러오는 중…</div>
-  </div>
-  <div class="pager">
-    <button id="prev" type="button" aria-label="이전 슬라이드">◀ 이전</button>
-    <span class="count" id="count">– / –</span>
-    <button id="next" type="button" aria-label="다음 슬라이드">다음 ▶</button>
+  <div class="viewer" id="viewer">
+    <div class="stage" id="stage">
+      <div class="slide" id="slide"><canvas id="cv" width="1280" height="720" aria-label="슬라이드"></canvas></div>
+      <div class="status" id="status">불러오는 중…</div>
+    </div>
+    <div class="pager">
+      <button id="prev" type="button" aria-label="이전 슬라이드">◀ 이전</button>
+      <span class="count" id="count">– / –</span>
+      <button id="next" type="button" aria-label="다음 슬라이드">다음 ▶</button>
+    </div>
+    <div class="zoombar">
+      <button id="zoomOut" type="button" aria-label="축소" disabled>－</button>
+      <span class="count" id="zoomLv">100%</span>
+      <button id="zoomIn" type="button" aria-label="확대">＋</button>
+      <button id="zoomFit" type="button">맞춤</button>
+      <button id="fullBtn" type="button">전체화면</button>
+    </div>
   </div>
   <section class="results" id="results" hidden>
     <h2><span id="resTitle"></span><span><button id="hitPrev" type="button">이전 결과</button> <button id="hitNext" type="button">다음 결과</button></span></h2>
     <ol id="resList"></ol>
   </section>
-  <p class="hint">.pptx 파일만 열 수 있습니다(PC에서는 파일을 끌어다 놓아도 됩니다). 파일은 이 기기 안에서만 읽고 어디로도 보내지 않습니다. 화면을 좌우로 밀어도 넘어갑니다.</p>
+  <p class="hint">.pptx 파일만 열 수 있습니다(PC에서는 파일을 끌어다 놓아도 됩니다). 파일은 이 기기 안에서만 읽고 어디로도 보내지 않습니다. 화면을 좌우로 밀어도 넘어갑니다. 두 손가락으로 벌리면 확대, PC에서는 Ctrl+휠·＋/－ 키로 확대하고 F 키는 전체화면입니다.</p>
 </div>
 
 <!-- 오픈소스 pptx-browser 4.1.5 (MIT, 글자색 1곳 수정 — vendor/pptx-browser-4.1.5/PATCH.md) 를 묶어 넣음 -->
@@ -98,6 +118,8 @@ const SAMPLE_B64 = "__SAMPLE_B64__";
 const $ = (id) => document.getElementById(id);
 const cv = $("cv"), slideBox = $("slide"), status = $("status");
 let r = null, cur = 0, hits = [], hitPos = -1, query = "", busy = Promise.resolve();
+let zoom = 1;                                   // 1 = 칸에 맞춤, 최대 5배
+const ZMIN = 1, ZMAX = 5, stage = $("stage"), viewer = $("viewer");
 
 function showStatus(t) { status.textContent = t; status.hidden = !t; }
 
@@ -121,7 +143,8 @@ function go(i) {
   busy = busy.then(async () => {
     if (!r || !r.slideCount) return;
     cur = Math.max(0, Math.min(r.slideCount - 1, i));
-    await r.renderSlide(cur, cv, Math.min(1920, Math.round(slideBox.clientWidth * (window.devicePixelRatio || 1)) || 1280));
+    sizeSlide();
+    await r.renderSlide(cur, cv, Math.min(4096, Math.round(slideBox.clientWidth * (window.devicePixelRatio || 1)) || 1280));
     showStatus("");
     $("count").textContent = `${cur + 1} / ${r.slideCount}`;
     $("prev").disabled = cur === 0; $("next").disabled = cur === r.slideCount - 1;
@@ -129,6 +152,50 @@ function go(i) {
     for (const b of $("resList").querySelectorAll("button")) b.setAttribute("aria-current", String(+b.dataset.i === cur));
   });
   return busy;
+}
+
+// ── 크기·확대·전체화면 ─────────────────────────────────────
+function isFull() { return document.fullscreenElement === viewer || viewer.classList.contains("full"); }
+function fitWidth() {                           // 확대 1배일 때 슬라이드 폭: 칸 폭, 전체화면이면 높이에도 맞춤
+  const cs = getComputedStyle(stage);
+  const w = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  if (!r || !isFull()) return w;
+  const h = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  return Math.min(w, h * r.slideSize.cx / r.slideSize.cy);
+}
+function sizeSlide() {
+  const fw = fitWidth();
+  slideBox.style.width = Math.max(50, Math.floor(fw * zoom)) + "px";
+  // 보통 화면: 칸 높이는 맞춤(1배) 크기로 고정하고, 확대한 부분은 칸 안에서 밀어 본다
+  const cs = getComputedStyle(stage);
+  stage.style.height = isFull() || !r ? "" : Math.ceil(fw * r.slideSize.cy / r.slideSize.cx + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) + "px";
+  $("zoomLv").textContent = Math.round(zoom * 100) + "%";
+  $("zoomOut").disabled = zoom <= ZMIN; $("zoomIn").disabled = zoom >= ZMAX;
+}
+// 확대: 기준점(cx, cy — 칸 안 좌표)이 화면에서 제자리에 있도록 스크롤을 맞춘다. 화면은 바로 늘리고 선명한 다시 그리기는 잠시 뒤
+let zt;
+function setZoom(z, cx = stage.clientWidth / 2, cy = stage.clientHeight / 2) {
+  z = Math.min(ZMAX, Math.max(ZMIN, z));
+  if (Math.abs(z - zoom) < 0.001) return;
+  const k = z / zoom, sx = stage.scrollLeft + cx, sy = stage.scrollTop + cy;
+  zoom = z; sizeSlide();
+  stage.scrollLeft = sx * k - cx; stage.scrollTop = sy * k - cy;
+  clearTimeout(zt); zt = setTimeout(() => go(cur), 250);
+}
+async function toggleFull() {
+  if (isFull()) {
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+    viewer.classList.remove("full");
+  } else {
+    try { await viewer.requestFullscreen(); } catch { viewer.classList.add("full"); }
+  }
+  afterFull();
+}
+function afterFull() {
+  $("fullBtn").textContent = isFull() ? "전체화면 끝" : "전체화면";
+  document.body.style.overflow = viewer.classList.contains("full") ? "hidden" : "";
+  zoom = 1; stage.scrollTo(0, 0);
+  setTimeout(() => go(cur), 80);
 }
 
 // 찾은 글자가 들어 있는 글상자 위치(슬라이드 XML 의 a:off/a:ext, EMU)에 표시. 위치가 레이아웃에서 상속된 글상자는 목록에만 나온다.
@@ -206,6 +273,17 @@ document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => { e.preventDefault(); pick(e.dataTransfer?.files?.[0]); });
 $("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("q").value); $("q").blur(); });
 $("prev").addEventListener("click", () => go(cur - 1));
+$("zoomIn").addEventListener("click", () => setZoom(zoom * 1.25));
+$("zoomOut").addEventListener("click", () => setZoom(zoom / 1.25));
+$("zoomFit").addEventListener("click", () => setZoom(1));
+$("fullBtn").addEventListener("click", toggleFull);
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) viewer.classList.remove("full"); afterFull(); });
+stage.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  const b = stage.getBoundingClientRect();
+  setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - b.left, e.clientY - b.top);
+}, { passive: false });
 $("next").addEventListener("click", () => go(cur + 1));
 $("hitPrev").addEventListener("click", () => stepHit(-1));
 $("hitNext").addEventListener("click", () => stepHit(1));
@@ -213,17 +291,39 @@ document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
   if (e.key === "ArrowLeft" || e.key === "PageUp") go(cur - 1);
   if (e.key === "ArrowRight" || e.key === "PageDown") go(cur + 1);
+  if (e.key === "+" || e.key === "=") setZoom(zoom * 1.25);
+  if (e.key === "-") setZoom(zoom / 1.25);
+  if (e.key === "0") setZoom(1);
+  if (e.key === "f" || e.key === "F") toggleFull();
+  if (e.key === "Escape" && viewer.classList.contains("full")) toggleFull();
 });
-let sx = null;
-$("stage").addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; }, { passive: true });
-$("stage").addEventListener("touchend", (e) => {
-  if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
+// 터치: 한 손가락 좌우 밀기 = 쪽 넘김(확대 안 했을 때만), 두 손가락 = 확대·축소
+let sx = null, pinch = null;
+const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+stage.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 2) {
+    const b = stage.getBoundingClientRect();
+    pinch = { d: dist(e.touches), z: zoom, cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - b.left,
+              cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - b.top };
+    sx = null;
+  } else if (e.touches.length === 1 && zoom <= 1.01) sx = e.touches[0].clientX;
+}, { passive: true });
+stage.addEventListener("touchmove", (e) => {
+  if (!pinch || e.touches.length !== 2) return;
+  e.preventDefault();
+  setZoom(pinch.z * dist(e.touches) / pinch.d, pinch.cx, pinch.cy);
+}, { passive: false });
+stage.addEventListener("touchend", (e) => {
+  if (e.touches.length < 2) pinch = null;
+  if (sx === null || e.touches.length) return;
+  const dx = e.changedTouches[0].clientX - sx; sx = null;
   if (Math.abs(dx) > 50) go(cur + (dx < 0 ? 1 : -1));
 });
 let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => go(cur), 200); });
 
 // 에이전트·시험용 조작 (headless): window.pptxViewer.search("매출") 등
-window.pptxViewer = { open, search, go, get state() { return { slide: cur, count: r?.slideCount || 0, query, hits: hits.map((h) => h.slideIndex) }; } };
+window.pptxViewer = { open, search, go, setZoom, toggleFull,
+  get state() { return { slide: cur, count: r?.slideCount || 0, query, hits: hits.map((h) => h.slideIndex), zoom: +zoom.toFixed(2), full: isFull() }; } };
 
 const bin = Uint8Array.from(atob(SAMPLE_B64), (c) => c.charCodeAt(0));
 open(bin, "예시 발표자료 (파일 열기로 내 .pptx 를 여세요)");
