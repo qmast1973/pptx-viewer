@@ -14,6 +14,8 @@
 - 확대·축소(100~500%): －/＋/맞춤 버튼, 두 손가락, Ctrl+휠, +/−/0 키 (100% = 칸에 맞춤)
 - 전체화면: 슬라이드 오른쪽 위 아이콘 또는 F 키. 안 되는 폰은 화면 덮기. 전체화면에서는 쪽 번호·🔍 찾기 막대·접기 아이콘·⋮ 메뉴(찾기, 결과 목록 보기, 이전/다음 결과·쪽, 확대·축소·맞춤, 끝)
 
+- **앱 설치**(2026-10-20): 제목줄 **앱 설치** 버튼 → 크롬·엣지·삼성 인터넷은 설치 창, 아이폰·아이패드는 Safari '홈 화면에 추가' 안내, 그 밖은 브라우저 메뉴 안내. 설치하면 앱 창으로 열리고(manifest.webmanifest), 앱 파일을 보관해 인터넷 없이도 열림(sw.js). 설치한 앱으로 PC 에서 .pptx 를 바로 열기(file_handlers), 폰에서 카톡 등 → **공유 → 슬라이드 찾기**로 파일 받기(share_target)
+
 ## 구성
 | 파일 | 내용 |
 |---|---|
@@ -23,6 +25,7 @@
 | `vendor/pptx-vanilla-viewer.bundle.js` | 슬라이드 표시 라이브러리 묶음 (전역 `PVV`, 약 12MB·gzip 3.8MB). 라이선스 `vendor/pptx-vanilla-viewer-3.42.0/LICENSE`·`NOTICE`, 함께 묶인 라이브러리 고지 `…bundle.js.LEGAL.txt` |
 | `tools/vv/` | 위 묶음 만들기 (package.json·entry.js, `npm install` 후 esbuild) |
 | `vendor/pptx-browser-4.1.5/` · `vendor/pptx-browser.bundle.js` | 찾기용 XML 읽기 (MIT, 예전 렌더러 — 버그 2곳 수정 `PATCH.md`) |
+| `manifest.webmanifest` · `icons/` · `sw.js` | 앱 설치 정보·아이콘(`tools/make_icons.py`)·서비스 워커(`tools/sw.template.js` 로 build.py 가 버전 넣어 생성 — 직접 고치지 않음) |
 | `tools/search.mjs` | 화면 없이 찾기 (에이전트·시험용) |
 | `tools/make_sample.py` | 첫 화면 예시 `sample/예시_발표.pptx` 생성 (python-pptx) |
 

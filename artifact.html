@@ -44,6 +44,19 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 /* 손가락이 진짜 파일 입력칸을 직접 누르도록 버튼 전체를 덮는다 (label 탭을 무시하는 폰 화면 대비) */
 .btn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
 
+/* ── 앱 설치 버튼·안내 ── */
+.install { white-space: nowrap; }
+@media (max-width: 599px) { .install { width: 38px; padding: 0; } .install .itxt { display: none; } }
+dialog.help { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; max-width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 20px 50px rgb(0 0 0 / .6); }
+dialog.help::backdrop { background: rgb(0 0 0 / .55); }
+dialog.help h3 { margin: 0 0 10px; font-size: 17px; }
+dialog.help ol { margin: 0 0 16px; padding-left: 20px; line-height: 1.8; color: var(--muted); }
+dialog.help ol b { color: var(--fg); }
+dialog.help .row { display: flex; justify-content: flex-end; }
+.toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 90;
+  background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 10px 16px; border-radius: 10px; box-shadow: 0 10px 30px rgb(0 0 0 / .5); }
+
 /* ── 본문 2단 ── */
 .app { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "main results"; min-height: 0; }
 .app.nores { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main"; }
@@ -148,6 +161,9 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
     <input id="q" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search" aria-label="슬라이드에서 찾기">
     <button class="primary" type="submit">찾기</button>
   </form>
+  <button class="install" id="installBtn" type="button" hidden title="이 기기에 앱으로 설치" aria-label="앱 설치">
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span class="itxt">앱 설치</span>
+  </button>
   <label class="btn" for="fileIn">
     <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
     파일 열기<input id="fileIn" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation">
@@ -223,6 +239,12 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
     <ol id="resList"></ol>
   </aside>
 </div>
+<dialog class="help" id="installHelp" aria-labelledby="installHelpTitle">
+  <h3 id="installHelpTitle">앱으로 설치하기</h3>
+  <ol id="installSteps"></ol>
+  <div class="row"><button class="primary" type="button" id="installHelpClose">확인</button></div>
+</dialog>
+<div class="toast" id="toast" role="status" hidden></div>
 <p class="hint">.pptx 파일만 열 수 있습니다(PC에서는 파일을 끌어다 놓아도 됩니다). 파일은 이 기기 안에서만 읽고 어디로도 보내지 않습니다. 화면을 좌우로 밀어도 넘어갑니다. 두 손가락으로 벌리면 확대, PC에서는 Ctrl+휠·＋/－ 키로 확대하고 F 키는 전체화면입니다. 슬라이드 표시: pptx-viewer(Apache-2.0).</p>
 
 <!-- 찾기용 파일 읽기: pptx-browser 4.1.5 (MIT, vendor/pptx-browser-4.1.5/PATCH.md) — 이제 그리지는 않고 슬라이드 XML 만 읽는다 -->
@@ -13363,11 +13385,65 @@ stage.addEventListener("touchend", (e) => {
 }, { capture: true });
 let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(refit, 200); });
 
+// ── 앱 설치 (2026-10-20 사용자 요청: 크롬 메뉴 설치가 제대로 안 돼 화면 안 설치 버튼) ─────────
+// 크롬·엣지·삼성 인터넷: beforeinstallprompt 로 받은 설치 창을 버튼에서 띄운다. 아이폰·아이패드는 직접 띄울 수 없어 방법을 보여 준다.
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: window-controls-overlay)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let installEvt = null;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3500); }
+function installHelp(steps) {
+  $("installSteps").innerHTML = steps.map((s) => `<li>${s}</li>`).join("");
+  $("installHelp").showModal ? $("installHelp").showModal() : ($("installHelp").open = true);
+}
+const hasManifest = !!document.querySelector('link[rel="manifest"]');
+if (hasManifest && !isStandalone() && isIOS) $("installBtn").hidden = false;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; if (!isStandalone()) $("installBtn").hidden = false; });
+window.addEventListener("appinstalled", () => { installEvt = null; $("installBtn").hidden = true; toast("앱을 설치했습니다. 홈 화면(또는 시작 메뉴)에서 '슬라이드 찾기'로 여세요."); });
+$("installBtn").addEventListener("click", async () => {
+  if (installEvt && !isIOS) {
+    try {
+      installEvt.prompt();
+      const { outcome } = await installEvt.userChoice;
+      installEvt = null;
+      if (outcome === "accepted") $("installBtn").hidden = true;
+      return;
+    } catch { installEvt = null; }               // 설치 창을 못 띄우면 아래 안내로
+  }
+  if (isIOS) {
+    installHelp(["Safari 로 이 페이지를 엽니다 (다른 앱 안의 브라우저에서는 설치가 안 됩니다)",
+      "아래(아이패드는 위) <b>공유 버튼</b>(네모에서 위 화살표)을 누릅니다", "<b>홈 화면에 추가</b>를 고른 뒤 <b>추가</b>를 누릅니다"]);
+  } else {
+    installHelp(["주소창 오른쪽의 <b>설치</b> 아이콘이나 브라우저 메뉴(⋮)의 <b>앱 설치</b>를 누릅니다",
+      "보이지 않으면 페이지를 한 번 새로고침한 뒤 다시 눌러 보세요", "카톡·밴드 같은 앱 안의 브라우저라면 <b>크롬으로 열기</b>를 먼저 하세요"]);
+  }
+});
+$("installHelpClose").addEventListener("click", () => $("installHelp").close());
+
+// 서비스 워커: 앱 파일 보관(빠른 실행·인터넷 없이 열기) + 공유로 받은 파일 전달. 새 판이 오면 다음 실행부터 적용
+if (hasManifest && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "127.0.0.1" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+// 설치한 앱으로 .pptx 를 열었을 때 (PC: 파일을 두 번 누르기·연결 프로그램)
+if ("launchQueue" in window) {
+  window.launchQueue.setConsumer(async (p) => { const h = p.files?.[0]; if (h) { const f = await h.getFile(); pick(f); } });
+}
+// 다른 앱에서 '공유'로 보낸 파일 (폰: 카톡 등 → 공유 → 슬라이드 찾기)
+async function openShared() {
+  if (!new URLSearchParams(location.search).has("shared") || !("caches" in window)) return false;
+  history.replaceState(null, "", location.pathname);
+  const c = await caches.open("pv-share"), res = await c.match("shared-file");
+  if (!res) { toast("공유한 파일을 받지 못했습니다. 파일 열기로 골라 주세요."); return false; }
+  await c.delete("shared-file");
+  const name = decodeURIComponent(res.headers.get("X-File-Name") || "공유받은 파일.pptx");
+  open(new File([await res.blob()], name), name);   // 공유 앱이 확장자를 빼고 보내는 경우가 있어 이름 검사 없이 연다
+  return true;
+}
+
 // 에이전트·시험용 조작 (headless): window.pptxViewer.search("매출") 등
 window.pptxViewer = { open, search, go, setZoom, toggleFull, menu: menuAct, openFind, get viewer() { return pv; },
   get state() { return { slide: cur, count, query, hits: hits.map((h) => h.slideIndex), zoom: +zoom.toFixed(2), full: isFull(),
     highlighted: hlCount, marks: CSS.highlights?.get("pv-hit")?.size ?? 0 }; } };
 
 const bin = Uint8Array.from(atob(SAMPLE_B64), (c) => c.charCodeAt(0));
-open(bin, "예시 발표자료");
+openShared().then((got) => { if (!got) open(bin, "예시 발표자료"); });
 </script>
