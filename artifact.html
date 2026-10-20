@@ -66,7 +66,7 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
 
 <div class="wrap">
   <div class="bar">
-    <label class="btn primary" for="fileIn">파일 열기<input id="fileIn" type="file"></label>
+    <label class="btn primary" for="fileIn">파일 열기<input id="fileIn" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"></label>
     <div class="file" id="fileName">예시 발표자료</div>
   </div>
   <form class="search" id="searchForm" role="search">
@@ -324,7 +324,7 @@ async function search(q) {
 
 function stepHit(d) { if (!hits.length) return; hitPos = (hitPos + d + hits.length) % hits.length; go(hits[hitPos].slideIndex); }
 
-// 파일 고르기: 폰 파일앱이 pptx 종류를 모르는 경우(카톡·메일로 받은 파일 등)가 있어 종류 제한 없이 고르고 여기서 확인한다
+// 파일 고르기: 고르는 창에는 .pptx 만 보이게 하고(accept, 2026-10-20 사용자 요청), 끌어다 놓기 등으로 들어온 파일은 여기서 한 번 더 확인한다
 function pick(f) {
   if (!f) return;
   if (!/\.pptx$/i.test(f.name)) { showStatus(`"${f.name}" 은(는) .pptx 파일이 아닙니다. .pptx 파일을 골라 주세요.`); return; }
