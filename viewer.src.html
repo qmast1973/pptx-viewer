@@ -1,0 +1,227 @@
+<meta charset="utf-8">
+<title>슬라이드 찾기 뷰어</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위 도구줄(열기·찾기) → 슬라이드 한 장 → 쪽 넘김 → 찾기 결과 목록. 폰 세로 화면 기준 한 줄 흐름 */
+:root {
+  --bg: #eef1f4; --surface: #ffffff; --fg: #1d2630; --muted: #5d6b79; --line: #d3dae1;
+  --accent: #1f5f8b; --accent-fg: #ffffff; --mark: #ffd84d; --mark-line: #e0a800;
+  --stage: #2b3540;
+  --f-ui: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12171c; --surface: #1b232b; --fg: #e4eaf0; --muted: #94a3b1; --line: #2e3a46;
+  --accent: #6fb3e0; --accent-fg: #0d1b26; --mark: #ffd84d; --mark-line: #ffc400; --stage: #0b0f13; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12171c; --surface: #1b232b; --fg: #e4eaf0; --muted: #94a3b1; --line: #2e3a46;
+  --accent: #6fb3e0; --accent-fg: #0d1b26; --mark: #ffd84d; --mark-line: #ffc400; --stage: #0b0f13; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 15px; }
+.wrap { max-width: 960px; margin: 0 auto; padding-block: 12px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.file { flex: 1 1 200px; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button, .btn { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  border-radius: 8px; padding: 9px 14px; cursor: pointer; min-height: 42px; }
+button:focus-visible, input:focus-visible, .btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+.btn { display: inline-flex; align-items: center; position: relative; }
+/* 손가락이 진짜 파일 입력칸을 직접 누르도록 버튼 전체를 덮는다 (label 탭을 무시하는 폰 화면 대비) */
+.btn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+.search { display: flex; gap: 8px; }
+.search input { flex: 1; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg); min-height: 42px; }
+.stage { background: var(--stage); border-radius: 10px; padding: 8px; position: relative; touch-action: pan-y; }
+.slide { position: relative; margin: 0 auto; max-width: 100%; }
+.slide canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 3px; }
+.hit { position: absolute; border: 3px solid var(--mark-line); background: color-mix(in srgb, var(--mark) 30%, transparent);
+  border-radius: 4px; pointer-events: none; }
+.hit.now { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mark) 55%, transparent); }
+.status { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 14px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.count { font-family: var(--f-num); font-variant-numeric: tabular-nums; color: var(--muted); }
+.results { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.results h2 { font-size: 13px; letter-spacing: .04em; color: var(--muted); margin: 0; padding: 12px 14px;
+  border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.results ol { list-style: none; margin: 0; padding: 0; }
+.results li button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: transparent; display: grid; grid-template-columns: 3.2em 1fr; gap: 10px; padding: 12px 14px; }
+.results li:last-child button { border-bottom: 0; }
+.results li button[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.no { font-family: var(--f-num); color: var(--accent); font-weight: 600; }
+.ex { min-width: 0; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.ex b { color: var(--fg); }
+mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1px; }
+.empty { padding: 14px; color: var(--muted); }
+.hint { font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .hit { transition: box-shadow .2s; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+
+<div class="wrap">
+  <div class="bar">
+    <label class="btn primary" for="fileIn">파일 열기<input id="fileIn" type="file"></label>
+    <div class="file" id="fileName">예시 발표자료</div>
+  </div>
+  <form class="search" id="searchForm" role="search">
+    <input id="q" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search">
+    <button class="primary" type="submit">찾기</button>
+  </form>
+  <div class="stage" id="stage">
+    <div class="slide" id="slide"><canvas id="cv" width="1280" height="720" aria-label="슬라이드"></canvas></div>
+    <div class="status" id="status">불러오는 중…</div>
+  </div>
+  <div class="pager">
+    <button id="prev" type="button" aria-label="이전 슬라이드">◀ 이전</button>
+    <span class="count" id="count">– / –</span>
+    <button id="next" type="button" aria-label="다음 슬라이드">다음 ▶</button>
+  </div>
+  <section class="results" id="results" hidden>
+    <h2><span id="resTitle"></span><span><button id="hitPrev" type="button">이전 결과</button> <button id="hitNext" type="button">다음 결과</button></span></h2>
+    <ol id="resList"></ol>
+  </section>
+  <p class="hint">.pptx 파일만 열 수 있습니다(PC에서는 파일을 끌어다 놓아도 됩니다). 파일은 이 기기 안에서만 읽고 어디로도 보내지 않습니다. 화면을 좌우로 밀어도 넘어갑니다.</p>
+</div>
+
+<!-- 오픈소스 pptx-browser 4.1.5 (MIT, 글자색 1곳 수정 — vendor/pptx-browser-4.1.5/PATCH.md) 를 묶어 넣음 -->
+<script>__BUNDLE__</script>
+<script type="module">
+const { PptxRenderer } = window.PPTX;
+
+const SAMPLE_B64 = "__SAMPLE_B64__";
+const $ = (id) => document.getElementById(id);
+const cv = $("cv"), slideBox = $("slide"), status = $("status");
+let r = null, cur = 0, hits = [], hitPos = -1, query = "", busy = Promise.resolve();
+
+function showStatus(t) { status.textContent = t; status.hidden = !t; }
+
+async function open(data, name) {
+  showStatus("불러오는 중…");
+  hits = []; hitPos = -1; query = ""; $("q").value = ""; $("results").hidden = true;
+  try {
+    r?.destroy();
+    r = new PptxRenderer();
+    await r.load(data);
+    $("fileName").textContent = name;
+    await go(0);
+  } catch (e) {
+    r = null;
+    showStatus("이 파일을 열지 못했습니다. .pptx 파일인지 확인하세요. (" + (e?.message || e) + ")");
+    $("count").textContent = "– / –";
+  }
+}
+
+function go(i) {
+  busy = busy.then(async () => {
+    if (!r || !r.slideCount) return;
+    cur = Math.max(0, Math.min(r.slideCount - 1, i));
+    await r.renderSlide(cur, cv, Math.min(1920, Math.round(slideBox.clientWidth * (window.devicePixelRatio || 1)) || 1280));
+    showStatus("");
+    $("count").textContent = `${cur + 1} / ${r.slideCount}`;
+    $("prev").disabled = cur === 0; $("next").disabled = cur === r.slideCount - 1;
+    drawHits();
+    for (const b of $("resList").querySelectorAll("button")) b.setAttribute("aria-current", String(+b.dataset.i === cur));
+  });
+  return busy;
+}
+
+// 찾은 글자가 들어 있는 글상자 위치(슬라이드 XML 의 a:off/a:ext, EMU)에 표시. 위치가 레이아웃에서 상속된 글상자는 목록에만 나온다.
+function boxesFor(i, q) {
+  const xml = new TextDecoder().decode(r._files[r.slidePaths[i]]);
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const out = [];
+  for (const sp of doc.getElementsByTagNameNS("*", "sp")) {
+    const text = [...sp.getElementsByTagNameNS("*", "t")].map((t) => t.textContent).join("");
+    if (!text.toLowerCase().includes(q)) continue;
+    const off = sp.getElementsByTagNameNS("*", "off")[0], ext = sp.getElementsByTagNameNS("*", "ext")[0];
+    if (!off || !ext || sp.parentElement?.localName === "grpSp") continue;
+    out.push({ x: +off.getAttribute("x"), y: +off.getAttribute("y"), w: +ext.getAttribute("cx"), h: +ext.getAttribute("cy") });
+  }
+  return out;
+}
+
+function drawHits() {
+  slideBox.querySelectorAll(".hit").forEach((n) => n.remove());
+  if (!query || !r) return;
+  const { cx, cy } = r.slideSize;
+  for (const b of boxesFor(cur, query)) {
+    const d = document.createElement("div");
+    d.className = "hit now";
+    Object.assign(d.style, { left: (b.x / cx * 100) + "%", top: (b.y / cy * 100) + "%", width: (b.w / cx * 100) + "%", height: (b.h / cy * 100) + "%" });
+    slideBox.append(d);
+  }
+}
+
+// 슬라이드의 문단(a:p) 글자 목록 — 찾기는 문단 단위 (tools/search.mjs 와 같은 기준)
+function paragraphs(i) {
+  const doc = new DOMParser().parseFromString(new TextDecoder().decode(r._files[r.slidePaths[i]]), "application/xml");
+  return [...doc.getElementsByTagNameNS("*", "p")].filter((p) => p.namespaceURI?.includes("drawingml"))
+    .map((p) => [...p.getElementsByTagNameNS("*", "t")].map((t) => t.textContent).join("")).filter((s) => s.trim());
+}
+
+function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+async function search(q) {
+  query = q.trim().toLowerCase();
+  const list = $("resList"); list.replaceChildren();
+  if (!r || !query) { $("results").hidden = true; drawHits(); return; }
+  hits = [];
+  for (let i = 0; i < r.slideCount; i++) {
+    const ps = paragraphs(i), found = ps.filter((p) => p.toLowerCase().includes(query));
+    if (found.length) hits.push({ slideIndex: i, title: ps[0] || "", lines: found.slice(0, 3), more: found.length - 3 });
+  }
+  $("results").hidden = false;
+  $("resTitle").textContent = hits.length ? `"${q.trim()}" — ${hits.length}개 슬라이드에서 찾음` : `"${q.trim()}" — 찾지 못했습니다`;
+  $("hitPrev").disabled = $("hitNext").disabled = hits.length < 2;
+  if (!hits.length) { list.innerHTML = '<li class="empty">다른 낱말로 찾아 보세요. 띄어쓰기도 그대로 맞춰 찾습니다.</li>'; drawHits(); return; }
+  for (const h of hits) {
+    const li = document.createElement("li"), b = document.createElement("button");
+    b.type = "button"; b.dataset.i = h.slideIndex;
+    const mk = (s) => { const k = s.toLowerCase().indexOf(query); return esc(s.slice(0, k)) + "<mark>" + esc(s.slice(k, k + query.length)) + "</mark>" + esc(s.slice(k + query.length)); };
+    const ex = h.lines.map(mk).join("<br>") + (h.more > 0 ? `<br>… 외 ${h.more}곳` : "");
+    b.innerHTML = `<span class="no">${h.slideIndex + 1}쪽</span><span class="ex">${h.lines[0] !== h.title ? `<b>${esc(h.title)}</b><br>` : ""}${ex}</span>`;
+    b.addEventListener("click", () => { hitPos = hits.indexOf(h); go(h.slideIndex); slideBox.scrollIntoView({ block: "nearest" }); });
+    li.append(b); list.append(li);
+  }
+  hitPos = Math.max(0, hits.findIndex((h) => h.slideIndex >= cur));
+  await go(hits[hitPos].slideIndex);
+}
+
+function stepHit(d) { if (!hits.length) return; hitPos = (hitPos + d + hits.length) % hits.length; go(hits[hitPos].slideIndex); }
+
+// 파일 고르기: 폰 파일앱이 pptx 종류를 모르는 경우(카톡·메일로 받은 파일 등)가 있어 종류 제한 없이 고르고 여기서 확인한다
+function pick(f) {
+  if (!f) return;
+  if (!/\.pptx$/i.test(f.name)) { showStatus(`"${f.name}" 은(는) .pptx 파일이 아닙니다. .pptx 파일을 골라 주세요.`); return; }
+  open(f, f.name);
+}
+$("fileIn").addEventListener("change", (e) => { pick(e.target.files[0]); e.target.value = ""; });
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("drop", (e) => { e.preventDefault(); pick(e.dataTransfer?.files?.[0]); });
+$("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("q").value); $("q").blur(); });
+$("prev").addEventListener("click", () => go(cur - 1));
+$("next").addEventListener("click", () => go(cur + 1));
+$("hitPrev").addEventListener("click", () => stepHit(-1));
+$("hitNext").addEventListener("click", () => stepHit(1));
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowLeft" || e.key === "PageUp") go(cur - 1);
+  if (e.key === "ArrowRight" || e.key === "PageDown") go(cur + 1);
+});
+let sx = null;
+$("stage").addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; }, { passive: true });
+$("stage").addEventListener("touchend", (e) => {
+  if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
+  if (Math.abs(dx) > 50) go(cur + (dx < 0 ? 1 : -1));
+});
+let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => go(cur), 200); });
+
+// 에이전트·시험용 조작 (headless): window.pptxViewer.search("매출") 등
+window.pptxViewer = { open, search, go, get state() { return { slide: cur, count: r?.slideCount || 0, query, hits: hits.map((h) => h.slideIndex) }; } };
+
+const bin = Uint8Array.from(atob(SAMPLE_B64), (c) => c.charCodeAt(0));
+open(bin, "예시 발표자료 (파일 열기로 내 .pptx 를 여세요)");
+</script>
