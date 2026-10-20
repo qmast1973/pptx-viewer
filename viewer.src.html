@@ -2,174 +2,251 @@
 <title>슬라이드 찾기 뷰어</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 레이아웃: 위 도구줄(열기·찾기) → 슬라이드 한 장 → 쪽 넘김 → 찾기 결과 목록. 폰 세로 화면 기준 한 줄 흐름 */
+/* 레이아웃 (2026-10-20, christophervr.github.io/ooxml/pptx 의 앱 화면 참고):
+   위 제목줄(파일 이름·찾기·열기) → [왼쪽 썸네일 줄 | 가운데 어두운 작업판 위 슬라이드 + 아래 상태줄 | 오른쪽 찾기 결과]
+   폰(900px 미만)은 한 줄: 제목줄 → 슬라이드 → 상태줄 → 가로 썸네일 줄 → 찾기 결과 */
 :root {
-  --bg: #eef1f4; --surface: #ffffff; --fg: #1d2630; --muted: #5d6b79; --line: #d3dae1;
-  --accent: #1f5f8b; --accent-fg: #ffffff; --mark: #ffd84d; --mark-line: #e0a800;
-  --stage: #2b3540;
+  --bg: #16181c; --chrome: #1f2227; --panel: #24282e; --raise: #2c3138; --line: #363b43;
+  --fg: #e8eaed; --muted: #9aa1ab; --accent: #e8673c; --accent-fg: #ffffff; --accent-soft: rgb(232 103 60 / .16);
+  --canvas: #111316; --mark: #ffd84d; --mark-line: #ffc400;
   --f-ui: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --f-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #12171c; --surface: #1b232b; --fg: #e4eaf0; --muted: #94a3b1; --line: #2e3a46;
-  --accent: #6fb3e0; --accent-fg: #0d1b26; --mark: #ffd84d; --mark-line: #ffc400; --stage: #0b0f13; color-scheme: dark } }
-:root[data-theme="dark"] {
-  --bg: #12171c; --surface: #1b232b; --fg: #e4eaf0; --muted: #94a3b1; --line: #2e3a46;
-  --accent: #6fb3e0; --accent-fg: #0d1b26; --mark: #ffd84d; --mark-line: #ffc400; --stage: #0b0f13; color-scheme: dark }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
-body { margin: 0; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 14px; }
 img { max-width: 100%; }
-body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 15px; }
-.wrap { max-width: 960px; margin: 0 auto; padding-block: 12px 32px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  display: flex; flex-direction: column; gap: 12px; }
-.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.file { flex: 1 1 200px; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-button, .btn { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
-  border-radius: 8px; padding: 9px 14px; cursor: pointer; min-height: 42px; }
-button:focus-visible, input:focus-visible, .btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
-button:disabled { opacity: .45; cursor: default; }
-.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
-.btn { display: inline-flex; align-items: center; position: relative; }
+button, .btn { font: inherit; color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 12px; min-height: 38px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+button:hover:not(:disabled), .btn:hover { border-color: #4a515b; }
+button:focus-visible, input:focus-visible, .btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .4; cursor: default; }
+.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.ghost { background: transparent; border-color: transparent; }
+.ico { width: 38px; padding: 0; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ── 제목줄 ── */
+.topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--chrome); border-bottom: 1px solid var(--line);
+  padding-block: 8px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
+.badge { width: 30px; height: 30px; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; flex: none; }
+.doc { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.file { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { font-size: 12px; color: var(--muted); }
+.search { flex: 1 1 320px; max-width: 520px; display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 0 4px 0 10px; color: var(--muted); }
+.search:focus-within { border-color: var(--accent); }
+.search input { flex: 1; min-width: 0; font: inherit; color: var(--fg); background: transparent; border: 0; outline: 0; padding: 8px 2px; min-height: 36px; }
+.search button { min-height: 30px; padding: 4px 12px; }
+.btn { position: relative; }
 /* 손가락이 진짜 파일 입력칸을 직접 누르도록 버튼 전체를 덮는다 (label 탭을 무시하는 폰 화면 대비) */
 .btn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
-.search { display: flex; gap: 8px; }
-.search input { flex: 1; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--fg); min-height: 42px; }
-.viewer { display: flex; flex-direction: column; gap: 10px; position: relative; }
-/* 슬라이드 칸: 확대하면 칸 안에서 위아래·좌우로 밀어 본다. 두 손가락 확대는 페이지 대신 슬라이드만 (직접 처리) */
-.stage { background: var(--stage); border-radius: 10px; padding: 8px; position: relative; overflow: auto;
-  touch-action: pan-x pan-y; overscroll-behavior: contain; }
+
+/* ── 본문 3단 ── */
+.app { display: grid; grid-template-columns: 196px minmax(0, 1fr) 300px; grid-template-areas: "thumbs main results"; min-height: 0; }
+.app.nores { grid-template-columns: 196px minmax(0, 1fr); grid-template-areas: "thumbs main"; }
+.thumbs { grid-area: thumbs; background: var(--chrome); border-right: 1px solid var(--line); overflow-y: auto; padding: 12px 10px;
+  display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 54px); position: sticky; top: 0; }
+.thumb { position: relative; display: grid; grid-template-columns: 22px 1fr; align-items: start; gap: 6px; padding: 0; min-height: 0;
+  background: transparent; border: 0; border-radius: 0; text-align: left; }
+.thumb .n { font-family: var(--f-num); font-size: 12px; color: var(--muted); padding-top: 2px; text-align: right; }
+.thumb canvas { width: 100%; height: auto; display: block; background: #fff; border-radius: 3px; outline: 2px solid transparent; outline-offset: 2px; aspect-ratio: 16 / 9; }
+.thumb:hover canvas { outline-color: #4a515b; }
+.thumb.cur canvas { outline-color: var(--accent); }
+.thumb.cur .n { color: var(--accent); font-weight: 600; }
+.thumb.cur::before { content: ""; position: absolute; left: -10px; top: 0; bottom: 0; width: 3px; background: var(--accent); border-radius: 0 2px 2px 0; }
+.thumb.has-hit .n::after { content: ""; display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--mark); margin: 5px 0 0 auto; }
+.main { grid-area: main; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+/* ── 슬라이드 작업판 (전체화면 대상) ── */
+.viewer { display: flex; flex-direction: column; position: relative; flex: 1; min-height: 0; }
+.stage { position: relative; overflow: auto; padding: 24px; touch-action: pan-x pan-y; overscroll-behavior: contain; background: var(--canvas); }
 .slide { position: relative; margin: 0 auto; }
-.zoombar { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
-.zoombar .count { min-width: 4.2em; text-align: center; }
-/* 전체화면: 브라우저 전체화면(:fullscreen) 또는 지원 안 되는 폰(아이폰 등)에서는 화면을 덮는 방식(.full) */
-.viewer:fullscreen, .viewer.full { position: fixed; inset: 0; z-index: 50; background: var(--stage); gap: 8px;
-  padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
-.viewer:fullscreen .stage, .viewer.full .stage { flex: 1; min-height: 0; border-radius: 0; padding: 0; display: flex; }
-.viewer:fullscreen .slide, .viewer.full .slide { margin: auto; flex-shrink: 0; }
-.viewer:fullscreen .count, .viewer.full .count { color: #c9d3dc; }
-/* 전체화면에서는 아래 버튼줄을 숨기고 오른쪽 위 쪽 번호 + ⋮ 메뉴만 둔다 */
-.viewer:fullscreen .pager, .viewer.full .pager, .viewer:fullscreen .zoombar, .viewer.full .zoombar { display: none; }
-/* 오른쪽 위 떠 있는 버튼들: 보통 화면은 [전체화면] 아이콘만, 전체화면은 쪽 번호 + [전체화면 끝] 아이콘 + ⋮ */
-.fsbar { display: flex; align-items: center; gap: 8px; position: absolute; z-index: 5; top: 14px; right: 14px; }
+.slide canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 2px; box-shadow: 0 10px 40px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .04); }
+.hit { position: absolute; border: 3px solid var(--mark-line); background: color-mix(in srgb, var(--mark) 30%, transparent); border-radius: 4px; pointer-events: none; }
+.hit.now { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mark) 55%, transparent); }
+.status { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 14px; text-align: center; padding: 20px; }
+
+/* ── 아래 상태줄: 쪽 넘김 · 확대 ── */
+.statusbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--chrome);
+  border-top: 1px solid var(--line); padding-block: 6px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.pager, .zoombar { display: flex; align-items: center; gap: 4px; }
+.count { font-family: var(--f-num); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 4.6em; text-align: center; }
+
+/* ── 오른쪽 위 떠 있는 버튼들: 보통 화면은 [전체화면] 아이콘만, 전체화면은 쪽 번호 + 찾기 + [전체화면 끝] + ⋮ ── */
+.fsbar { display: flex; align-items: center; gap: 8px; position: absolute; z-index: 5; top: 12px; right: 12px; }
 .fsbar .count, .fsbar .more:not(.fs) { display: none; }
+.more { width: 42px; height: 42px; min-height: 0; padding: 0; border-radius: 50%; border: 0; background: rgb(0 0 0 / .55); color: #fff; font-size: 22px; line-height: 1; }
+.more:hover:not(:disabled) { background: rgb(0 0 0 / .75); }
+.more svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.more .ico-exit { display: none; }
+.fsbar .count { background: rgb(0 0 0 / .55); color: #fff; border-radius: 99px; padding: 6px 12px; min-width: 0; }
+.menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 210px; display: flex; flex-direction: column; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 12px 32px rgb(0 0 0 / .5); }
+.menu button { border: 0; background: transparent; justify-content: flex-start; border-radius: 6px; min-height: 42px; }
+.menu button:hover, .menu button:focus-visible { background: var(--accent-soft); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.fssearch { display: none; }
+
+/* ── 전체화면 ── */
+.viewer:fullscreen, .viewer.full { position: fixed; inset: 0; z-index: 50; background: #000;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.viewer:fullscreen .stage, .viewer.full .stage { flex: 1; min-height: 0; padding: 0; display: flex; background: #000; }
+.viewer:fullscreen .slide, .viewer.full .slide { margin: auto; flex-shrink: 0; }
+.viewer:fullscreen .slide canvas, .viewer.full .slide canvas { box-shadow: none; border-radius: 0; }
 .viewer:fullscreen .fsbar, .viewer.full .fsbar { top: max(10px, env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); }
 .viewer:fullscreen .fsbar .count, .viewer.full .fsbar .count, .viewer:fullscreen .fsbar .more, .viewer.full .fsbar .more { display: inline-flex; }
-.more svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.more .ico-exit, .viewer:fullscreen .more .ico-enter, .viewer.full .more .ico-enter { display: none; }
+.viewer:fullscreen .more .ico-enter, .viewer.full .more .ico-enter { display: none; }
 .viewer:fullscreen .more .ico-exit, .viewer.full .more .ico-exit { display: block; }
-.fssearch { display: none; }
 .viewer:fullscreen .fssearch:not([hidden]), .viewer.full .fssearch:not([hidden]) { display: flex; gap: 6px; align-items: center; position: absolute; z-index: 6;
-  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 54px); left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
+  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 52px); left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+  max-width: 640px; margin-left: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 32px rgb(0 0 0 / .5); }
 .fssearch input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); min-height: 40px; }
 .fssearch button { min-height: 40px; padding: 6px 10px; }
 .fssearch .hitn { font-family: var(--f-num); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; white-space: nowrap; }
-.fsbar .count { background: rgb(0 0 0 / .55); color: #fff; border-radius: 99px; padding: 6px 12px; font-size: 13px; }
-.more { width: 44px; height: 44px; min-height: 0; padding: 0; border-radius: 50%; border: 0;
-  background: rgb(0 0 0 / .55); color: #fff; font-size: 22px; line-height: 1; align-items: center; justify-content: center; }
-.more.fs { display: inline-flex; }
-.menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 200px; display: flex; flex-direction: column;
-  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 6px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
-.menu button { border: 0; background: transparent; text-align: left; border-radius: 6px; min-height: 44px; }
-.menu button:hover, .menu button:focus-visible { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; width: auto; }
-.slide canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 3px; }
-.hit { position: absolute; border: 3px solid var(--mark-line); background: color-mix(in srgb, var(--mark) 30%, transparent);
-  border-radius: 4px; pointer-events: none; }
-.hit.now { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mark) 55%, transparent); }
-.status { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 14px; }
-.pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.count { font-family: var(--f-num); font-variant-numeric: tabular-nums; color: var(--muted); }
-.results { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
-.results h2 { font-size: 13px; letter-spacing: .04em; color: var(--muted); margin: 0; padding: 12px 14px;
-  border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.results ol { list-style: none; margin: 0; padding: 0; }
-.results li button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
-  background: transparent; display: grid; grid-template-columns: 3.2em 1fr; gap: 10px; padding: 12px 14px; }
-.results li:last-child button { border-bottom: 0; }
-.results li button[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* ── 오른쪽 찾기 결과 ── */
+.results { grid-area: results; background: var(--chrome); border-left: 1px solid var(--line); min-width: 0; display: flex; flex-direction: column;
+  max-height: calc(100vh - 54px); position: sticky; top: 0; }
+.results h2 { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--muted); margin: 0; padding: 12px 14px;
+  border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.results h2 .nav { display: flex; gap: 4px; }
+.results h2 .nav button { min-height: 30px; padding: 3px 9px; font-size: 12px; }
+.results ol { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.results li button { width: 100%; text-align: left; justify-content: flex-start; align-items: start; border: 0; border-radius: 8px; background: transparent;
+  display: grid; grid-template-columns: 3em 1fr; gap: 8px; padding: 10px; }
+.results li button:hover { background: var(--raise); }
+.results li button[aria-current="true"] { background: var(--accent-soft); }
 .no { font-family: var(--f-num); color: var(--accent); font-weight: 600; }
-.ex { min-width: 0; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
-.ex b { color: var(--fg); }
+.ex { min-width: 0; color: var(--muted); line-height: 1.55; overflow-wrap: anywhere; }
+.ex b { color: var(--fg); font-weight: 600; }
 mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1px; }
 .empty { padding: 14px; color: var(--muted); }
-.hint { font-size: 13px; color: var(--muted); }
-@media (prefers-reduced-motion: no-preference) { .hit { transition: box-shadow .2s; } }
-</style>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+.hint { font-size: 12px; color: var(--muted); margin: 0; padding-block: 10px 18px; background: var(--bg);
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 
-<div class="wrap">
-  <div class="bar">
-    <label class="btn primary" for="fileIn">파일 열기<input id="fileIn" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"></label>
-    <div class="file" id="fileName">예시 발표자료</div>
+@media (min-width: 900px) {
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  .app, .app.nores { flex: 1; min-height: 0; }
+  .thumbs, .results { max-height: none; position: static; min-height: 0; }
+  .main { min-height: 0; }
+  .stage { flex: 1; min-height: 0; display: flex; }
+  .slide { margin: auto; flex-shrink: 0; }
+  .hint { padding-block: 6px; border-top: 1px solid var(--line); background: var(--chrome); }
+}
+/* ── 폰·좁은 화면: 한 줄로 쌓고 썸네일은 가로 줄 ── */
+@media (max-width: 899px) {
+  .search { order: 3; flex-basis: 100%; max-width: none; }
+  .app, .app.nores { display: flex; flex-direction: column; }
+  .main { order: 1; }
+  .thumbs { order: 2; flex-direction: row; overflow-x: auto; overflow-y: hidden; max-height: none; position: static; border-right: 0;
+    border-top: 1px solid var(--line); padding: 10px max(12px, env(safe-area-inset-left, 0px)); gap: 10px; }
+  .thumb { grid-template-columns: 1fr; flex: 0 0 120px; }
+  .thumb .n { position: absolute; left: 4px; bottom: 4px; z-index: 1; background: rgb(0 0 0 / .6); color: #fff; border-radius: 4px; padding: 1px 5px; text-align: left; }
+  .thumb.cur .n { background: var(--accent); color: #fff; }
+  .thumb.cur::before { display: none; }
+  .thumb.has-hit .n::after { display: inline-block; margin: 0 0 1px 4px; width: 6px; height: 6px; }
+  .results { order: 3; max-height: none; position: static; border-left: 0; border-top: 1px solid var(--line); }
+  .stage { padding: 12px; }
+  .zoombar .ztxt { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { .hit { transition: box-shadow .2s; } .thumb canvas { transition: outline-color .15s; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+
+<header class="topbar">
+  <div class="badge" aria-hidden="true">P</div>
+  <div class="doc">
+    <span class="file" id="fileName">예시 발표자료</span>
+    <span class="sub" id="docSub">슬라이드 찾기 뷰어</span>
   </div>
   <form class="search" id="searchForm" role="search">
-    <input id="q" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search">
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <input id="q" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search" aria-label="슬라이드에서 찾기">
     <button class="primary" type="submit">찾기</button>
   </form>
-  <div class="viewer" id="viewer">
-    <div class="stage" id="stage">
-      <div class="slide" id="slide"><canvas id="cv" width="1280" height="720" aria-label="슬라이드"></canvas></div>
-      <div class="status" id="status">불러오는 중…</div>
+  <label class="btn" for="fileIn">
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    파일 열기<input id="fileIn" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation">
+  </label>
+</header>
+
+<div class="app nores" id="app">
+  <nav class="thumbs" id="thumbs" aria-label="슬라이드 목록"></nav>
+  <main class="main">
+    <div class="viewer" id="viewer">
+      <div class="stage" id="stage">
+        <div class="slide" id="slide"><canvas id="cv" width="1280" height="720" aria-label="슬라이드"></canvas></div>
+        <div class="status" id="status">불러오는 중…</div>
+      </div>
+      <div class="fsbar" id="fsbar">
+        <span class="count" id="fsCount">– / –</span>
+        <button class="more" id="fsFindBtn" type="button" aria-label="찾기" title="찾기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        </button>
+        <button class="more fs" id="fullBtn" type="button" aria-label="전체화면" title="전체화면">
+          <svg class="ico-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          <svg class="ico-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+        </button>
+        <button class="more" id="moreBtn" type="button" aria-label="메뉴" aria-haspopup="menu" aria-expanded="false">⋮</button>
+        <div class="menu" id="menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-act="find">찾기</button>
+          <button type="button" role="menuitem" data-act="search">찾기 결과 목록 보기 (전체화면 끝)</button>
+          <button type="button" role="menuitem" data-act="hitPrev" data-hits>이전 결과</button>
+          <button type="button" role="menuitem" data-act="hitNext" data-hits>다음 결과</button>
+          <hr>
+          <button type="button" role="menuitem" data-act="prev">이전 쪽</button>
+          <button type="button" role="menuitem" data-act="next">다음 쪽</button>
+          <hr>
+          <button type="button" role="menuitem" data-act="zoomIn">확대</button>
+          <button type="button" role="menuitem" data-act="zoomOut">축소</button>
+          <button type="button" role="menuitem" data-act="fit">화면에 맞춤</button>
+          <hr>
+          <button type="button" role="menuitem" data-act="exit">전체화면 끝</button>
+        </div>
+      </div>
+      <form class="fssearch" id="fsSearch" role="search" hidden>
+        <input id="fsQ" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search" aria-label="전체화면에서 찾기">
+        <button class="primary" type="submit">찾기</button>
+        <span class="hitn" id="fsHitN"></span>
+        <button type="button" id="fsHitPrev" aria-label="이전 결과">◀</button>
+        <button type="button" id="fsHitNext" aria-label="다음 결과">▶</button>
+        <button type="button" id="fsFindClose" aria-label="찾기 닫기">✕</button>
+      </form>
     </div>
-    <div class="pager">
-      <button id="prev" type="button" aria-label="이전 슬라이드">◀ 이전</button>
-      <span class="count" id="count">– / –</span>
-      <button id="next" type="button" aria-label="다음 슬라이드">다음 ▶</button>
-    </div>
-    <div class="zoombar">
-      <button id="zoomOut" type="button" aria-label="축소" disabled>－</button>
-      <span class="count" id="zoomLv">100%</span>
-      <button id="zoomIn" type="button" aria-label="확대">＋</button>
-      <button id="zoomFit" type="button">맞춤</button>
-    </div>
-    <div class="fsbar" id="fsbar">
-      <span class="count" id="fsCount">– / –</span>
-      <button class="more" id="fsFindBtn" type="button" aria-label="찾기" title="찾기">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
-      </button>
-      <button class="more fs" id="fullBtn" type="button" aria-label="전체화면" title="전체화면">
-        <svg class="ico-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-        <svg class="ico-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
-      </button>
-      <button class="more" id="moreBtn" type="button" aria-label="메뉴" aria-haspopup="menu" aria-expanded="false">⋮</button>
-      <div class="menu" id="menu" role="menu" hidden>
-        <button type="button" role="menuitem" data-act="find">찾기</button>
-        <button type="button" role="menuitem" data-act="search">찾기 결과 목록 보기 (전체화면 끝)</button>
-        <button type="button" role="menuitem" data-act="hitPrev" data-hits>이전 결과</button>
-        <button type="button" role="menuitem" data-act="hitNext" data-hits>다음 결과</button>
-        <hr>
-        <button type="button" role="menuitem" data-act="prev">이전 쪽</button>
-        <button type="button" role="menuitem" data-act="next">다음 쪽</button>
-        <hr>
-        <button type="button" role="menuitem" data-act="zoomIn">확대</button>
-        <button type="button" role="menuitem" data-act="zoomOut">축소</button>
-        <button type="button" role="menuitem" data-act="fit">화면에 맞춤</button>
-        <hr>
-        <button type="button" role="menuitem" data-act="exit">전체화면 끝</button>
+    <div class="statusbar">
+      <div class="pager">
+        <button class="ghost ico" id="prev" type="button" aria-label="이전 슬라이드" title="이전 슬라이드">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <span class="count" id="count">– / –</span>
+        <button class="ghost ico" id="next" type="button" aria-label="다음 슬라이드" title="다음 슬라이드">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+      <div class="zoombar">
+        <button class="ghost ico" id="zoomOut" type="button" aria-label="축소" title="축소" disabled>
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>
+        </button>
+        <span class="count" id="zoomLv">100%</span>
+        <button class="ghost ico" id="zoomIn" type="button" aria-label="확대" title="확대">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>
+        </button>
+        <button class="ghost" id="zoomFit" type="button" title="화면에 맞춤">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1.5"/><path d="M9 10l-2 2 2 2M15 10l2 2-2 2"/></svg><span class="ztxt">맞춤</span>
+        </button>
       </div>
     </div>
-    <form class="fssearch" id="fsSearch" role="search" hidden>
-      <input id="fsQ" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search" aria-label="전체화면에서 찾기">
-      <button class="primary" type="submit">찾기</button>
-      <span class="hitn" id="fsHitN"></span>
-      <button type="button" id="fsHitPrev" aria-label="이전 결과">◀</button>
-      <button type="button" id="fsHitNext" aria-label="다음 결과">▶</button>
-      <button type="button" id="fsFindClose" aria-label="찾기 닫기">✕</button>
-    </form>
-  </div>
-  <section class="results" id="results" hidden>
-    <h2><span id="resTitle"></span><span><button id="hitPrev" type="button">이전 결과</button> <button id="hitNext" type="button">다음 결과</button></span></h2>
+  </main>
+  <aside class="results" id="results" hidden>
+    <h2><span id="resTitle"></span><span class="nav"><button id="hitPrev" type="button">이전 결과</button><button id="hitNext" type="button">다음 결과</button></span></h2>
     <ol id="resList"></ol>
-  </section>
-  <p class="hint">.pptx 파일만 열 수 있습니다(PC에서는 파일을 끌어다 놓아도 됩니다). 파일은 이 기기 안에서만 읽고 어디로도 보내지 않습니다. 화면을 좌우로 밀어도 넘어갑니다. 두 손가락으로 벌리면 확대, PC에서는 Ctrl+휠·＋/－ 키로 확대하고 F 키는 전체화면입니다.</p>
+  </aside>
 </div>
+<p class="hint">.pptx 파일만 열 수 있습니다(PC에서는 파일을 끌어다 놓아도 됩니다). 파일은 이 기기 안에서만 읽고 어디로도 보내지 않습니다. 화면을 좌우로 밀어도 넘어갑니다. 두 손가락으로 벌리면 확대, PC에서는 Ctrl+휠·＋/－ 키로 확대하고 F 키는 전체화면입니다.</p>
 
-<!-- 오픈소스 pptx-browser 4.1.5 (MIT, 글자색 1곳 수정 — vendor/pptx-browser-4.1.5/PATCH.md) 를 묶어 넣음 -->
+<!-- 오픈소스 pptx-browser 4.1.5 (MIT, 버그 2곳 수정 — vendor/pptx-browser-4.1.5/PATCH.md) 를 묶어 넣음 -->
 <script>__BUNDLE__</script>
 <script type="module">
 const { PptxRenderer } = window.PPTX;
@@ -180,23 +257,58 @@ const cv = $("cv"), slideBox = $("slide"), status = $("status");
 let r = null, cur = 0, hits = [], hitPos = -1, query = "", busy = Promise.resolve();
 let zoom = 1;                                   // 1 = 칸에 맞춤, 최대 5배
 const ZMIN = 1, ZMAX = 5, stage = $("stage"), viewer = $("viewer");
+let rt = null, thumbJob = 0;                    // 썸네일은 따로 불러온 렌더러로 그려 쪽 넘김을 막지 않는다
 
 function showStatus(t) { status.textContent = t; status.hidden = !t; }
+function showResults(on) { $("results").hidden = !on; $("app").classList.toggle("nores", !on); }
 
 async function open(data, name) {
   showStatus("불러오는 중…");
-  hits = []; hitPos = -1; query = ""; $("q").value = ""; $("results").hidden = true;
+  hits = []; hitPos = -1; query = ""; $("q").value = ""; showResults(false);
   try {
     r?.destroy();
     r = new PptxRenderer();
     await r.load(data);
     $("fileName").textContent = name;
+    $("docSub").textContent = `슬라이드 ${r.slideCount}장`;
     await go(0);
+    buildThumbs(data, r.slideCount);
   } catch (e) {
     r = null;
     showStatus("이 파일을 열지 못했습니다. .pptx 파일인지 확인하세요. (" + (e?.message || e) + ")");
     $("count").textContent = "– / –";
   }
+}
+
+// ── 썸네일 ─────────────────────────────────────────────────
+async function buildThumbs(data, n) {
+  const job = ++thumbJob, box = $("thumbs");
+  box.replaceChildren();
+  const cvs = [];
+  for (let i = 0; i < n; i++) {
+    const b = document.createElement("button"), c = document.createElement("canvas"), s = document.createElement("span");
+    b.type = "button"; b.className = "thumb"; b.dataset.i = i; b.setAttribute("aria-label", `${i + 1}쪽`);
+    s.className = "n"; s.textContent = i + 1; c.width = 320; c.height = 180;
+    b.append(s, c); b.addEventListener("click", () => go(i)); box.append(b); cvs.push(c);
+  }
+  markThumbs();
+  try {
+    rt?.destroy(); rt = new PptxRenderer(); await rt.load(data);
+    for (let i = 0; i < n; i++) {
+      if (job !== thumbJob) return;
+      await rt.renderSlide(i, cvs[i], 320);
+      await new Promise((ok) => setTimeout(ok, 0));
+    }
+  } catch { /* 썸네일 실패는 보기에 영향 없음 */ }
+}
+function markThumbs() {
+  const hs = new Set(hits.map((h) => h.slideIndex));
+  for (const b of $("thumbs").children) {
+    const i = +b.dataset.i;
+    b.classList.toggle("cur", i === cur); b.classList.toggle("has-hit", hs.has(i));
+    if (i === cur) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+  }
+  $("thumbs").querySelector(".cur")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function go(i) {
@@ -210,7 +322,7 @@ function go(i) {
     $("fsCount").textContent = `${cur + 1} / ${r.slideCount}` + (zoom > 1.01 ? ` · ${Math.round(zoom * 100)}%` : "");
     fsHitText();
     $("prev").disabled = cur === 0; $("next").disabled = cur === r.slideCount - 1;
-    drawHits();
+    drawHits(); markThumbs();
     for (const b of $("resList").querySelectorAll("button")) b.setAttribute("aria-current", String(+b.dataset.i === cur));
   });
   return busy;
@@ -218,19 +330,22 @@ function go(i) {
 
 // ── 크기·확대·전체화면 ─────────────────────────────────────
 function isFull() { return document.fullscreenElement === viewer || viewer.classList.contains("full"); }
-function fitWidth() {                           // 확대 1배일 때 슬라이드 폭: 칸 폭, 전체화면이면 높이에도 맞춤
+function fitWidth() {                           // 확대 1배일 때 슬라이드 폭: 칸 폭과 보이는 높이에 맞춤
   const cs = getComputedStyle(stage);
-  const w = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  if (!r || !isFull()) return w;
-  const h = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  return Math.min(w, h * r.slideSize.cx / r.slideSize.cy);
+  const pw = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight), ph = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const w = stage.clientWidth - pw;
+  if (!r) return w;
+  const ar = r.slideSize.cx / r.slideSize.cy;
+  // 전체화면·PC 화면: 칸 높이에도 맞춤 / 폰 보통 화면: 폭에 맞춤
+  if (isFull() || innerWidth >= 900) return Math.max(100, Math.min(w, (stage.clientHeight - ph) * ar));
+  return w;
 }
 function sizeSlide() {
   const fw = fitWidth();
   slideBox.style.width = Math.max(50, Math.floor(fw * zoom)) + "px";
-  // 보통 화면: 칸 높이는 맞춤(1배) 크기로 고정하고, 확대한 부분은 칸 안에서 밀어 본다
+  // 폰 보통 화면: 칸 높이는 맞춤(1배) 크기로 고정하고, 확대한 부분은 칸 안에서 밀어 본다 (PC 는 칸이 남은 높이를 채움)
   const cs = getComputedStyle(stage);
-  stage.style.height = isFull() || !r ? "" : Math.ceil(fw * r.slideSize.cy / r.slideSize.cx + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) + "px";
+  stage.style.height = isFull() || !r || innerWidth >= 900 ? "" : Math.ceil(fw * r.slideSize.cy / r.slideSize.cx + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) + "px";
   $("zoomLv").textContent = Math.round(zoom * 100) + "%";
   $("zoomOut").disabled = zoom <= ZMIN; $("zoomIn").disabled = zoom >= ZMAX;
 }
@@ -341,15 +456,16 @@ function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;
 async function search(q) {
   query = q.trim().toLowerCase();
   const list = $("resList"); list.replaceChildren();
-  if (!r || !query) { $("results").hidden = true; drawHits(); return; }
+  if (!r || !query) { hits = []; showResults(false); drawHits(); markThumbs(); return; }
   hits = [];
   for (let i = 0; i < r.slideCount; i++) {
     const ps = paragraphs(i), found = ps.filter((p) => p.toLowerCase().includes(query));
     if (found.length) hits.push({ slideIndex: i, title: ps[0] || "", lines: found.slice(0, 3), more: found.length - 3 });
   }
-  $("results").hidden = false;
-  $("resTitle").textContent = hits.length ? `"${q.trim()}" — ${hits.length}개 슬라이드에서 찾음` : `"${q.trim()}" — 찾지 못했습니다`;
+  showResults(true);
+  $("resTitle").textContent = hits.length ? `"${q.trim()}" — ${hits.length}개 슬라이드` : `"${q.trim()}" — 찾지 못했습니다`;
   $("hitPrev").disabled = $("hitNext").disabled = hits.length < 2;
+  markThumbs();
   if (!hits.length) { list.innerHTML = '<li class="empty">다른 낱말로 찾아 보세요. 띄어쓰기도 그대로 맞춰 찾습니다.</li>'; drawHits(); return; }
   for (const h of hits) {
     const li = document.createElement("li"), b = document.createElement("button");
@@ -357,7 +473,7 @@ async function search(q) {
     const mk = (s) => { const k = s.toLowerCase().indexOf(query); return esc(s.slice(0, k)) + "<mark>" + esc(s.slice(k, k + query.length)) + "</mark>" + esc(s.slice(k + query.length)); };
     const ex = h.lines.map(mk).join("<br>") + (h.more > 0 ? `<br>… 외 ${h.more}곳` : "");
     b.innerHTML = `<span class="no">${h.slideIndex + 1}쪽</span><span class="ex">${h.lines[0] !== h.title ? `<b>${esc(h.title)}</b><br>` : ""}${ex}</span>`;
-    b.addEventListener("click", () => { hitPos = hits.indexOf(h); go(h.slideIndex); slideBox.scrollIntoView({ block: "nearest" }); });
+    b.addEventListener("click", () => { hitPos = hits.indexOf(h); go(h.slideIndex); if (innerWidth < 900) slideBox.scrollIntoView({ block: "nearest" }); });
     li.append(b); list.append(li);
   }
   hitPos = Math.max(0, hits.findIndex((h) => h.slideIndex >= cur));
@@ -377,6 +493,7 @@ document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => { e.preventDefault(); pick(e.dataTransfer?.files?.[0]); });
 $("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("q").value); $("q").blur(); });
 $("prev").addEventListener("click", () => go(cur - 1));
+$("next").addEventListener("click", () => go(cur + 1));
 $("zoomIn").addEventListener("click", () => setZoom(zoom * 1.25));
 $("zoomOut").addEventListener("click", () => setZoom(zoom / 1.25));
 $("zoomFit").addEventListener("click", () => setZoom(1));
@@ -402,7 +519,6 @@ stage.addEventListener("wheel", (e) => {
   const b = stage.getBoundingClientRect();
   setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - b.left, e.clientY - b.top);
 }, { passive: false });
-$("next").addEventListener("click", () => go(cur + 1));
 $("hitPrev").addEventListener("click", () => stepHit(-1));
 $("hitNext").addEventListener("click", () => stepHit(1));
 document.addEventListener("keydown", (e) => {
@@ -438,12 +554,13 @@ stage.addEventListener("touchend", (e) => {
   const dx = e.changedTouches[0].clientX - sx; sx = null;
   if (Math.abs(dx) > 50) go(cur + (dx < 0 ? 1 : -1));
 });
-let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => go(cur), 200); });
+let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => go(cur), 200); });
 
 // 에이전트·시험용 조작 (headless): window.pptxViewer.search("매출") 등
 window.pptxViewer = { open, search, go, setZoom, toggleFull, menu: menuAct, openFind,
-  get state() { return { slide: cur, count: r?.slideCount || 0, query, hits: hits.map((h) => h.slideIndex), zoom: +zoom.toFixed(2), full: isFull() }; } };
+  get state() { return { slide: cur, count: r?.slideCount || 0, query, hits: hits.map((h) => h.slideIndex), zoom: +zoom.toFixed(2), full: isFull(),
+    thumbs: [...$("thumbs").children].length }; } };
 
 const bin = Uint8Array.from(atob(SAMPLE_B64), (c) => c.charCodeAt(0));
-open(bin, "예시 발표자료 (파일 열기로 내 .pptx 를 여세요)");
+open(bin, "예시 발표자료");
 </script>
