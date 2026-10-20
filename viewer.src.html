@@ -154,6 +154,8 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
   .results { order: 3; border-left: 0; border-top: 1px solid var(--line); }
   .stage .pptxv-thumbs { display: none; }
   .zoombar .ztxt { display: none; }
+  /* 폰 보통 화면: 칸 높이는 sizeStage() 가 슬라이드 비율로 정한 값 그대로 (flex 로 늘이거나 줄이지 않음) */
+  .viewer:not(.full):not(:fullscreen) .stage { flex: none; min-height: 160px; }
 }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
@@ -268,7 +270,7 @@ const $ = (id) => document.getElementById(id);
 const status = $("status"), stage = $("stage"), viewer = $("viewer");
 let parser = null, pv = null, count = 0, cur = 0, hits = [], hitPos = -1, query = "", hlCount = 0;
 let zoom = 1, fit = 1;                          // zoom 1 = 칸에 맞춤 (fit = 그때 뷰어의 실제 배율), 최대 5배
-const ZMIN = 1, ZMAX = 5;
+const ZMIN = 1, ZMAX = 5, FIT_PAD = 12;
 
 function showStatus(t) { status.textContent = t; status.hidden = !t; }
 function showResults(on) { $("results").hidden = !on; $("app").classList.toggle("nores", !on); }
@@ -287,6 +289,7 @@ async function open(data, name) {
       pv = PVV.createPptxViewer(stage, {
         source: bytes.slice(), fileName: name, theme: PVV.vermilionDarkTheme, locale: "en",
         editable: false, autosave: false, showToolbar: false, showThumbnails: true, showCompatibilityToasts: false,
+        fitPadding: FIT_PAD, maxFitScale: null,
         onLoad: () => { clearTimeout(to); ok(); },
         onError: (m) => { clearTimeout(to); ng(new Error(m)); },
         onSlideChange: (i) => { cur = i; afterSlide(); },
@@ -295,7 +298,7 @@ async function open(data, name) {
     $("fileName").textContent = name;
     $("docSub").textContent = `슬라이드 ${count}장`;
     showStatus("");
-    setTimeout(refit, 60);
+    refit(); setTimeout(refit, 150); setTimeout(refit, 600);   // 처음 열 때 화면 크기에 맞춤 (글꼴·썸네일이 늦게 자리 잡아도 다시 맞춤)
     afterSlide();
   } catch (e) {
     showStatus("이 파일을 열지 못했습니다. .pptx 파일인지 확인하세요. (" + (e?.message || e) + ")");
@@ -346,26 +349,39 @@ function isFull() { return document.fullscreenElement === viewer || viewer.class
 function sizeStage() {                          // 폰 보통 화면: 슬라이드 비율에 맞는 높이 / PC·전체화면: 남은 칸을 채움
   if (isFull() || innerWidth >= 900 || !parser) { stage.style.height = ""; return; }
   const { cx, cy } = parser.slideSize;
-  stage.style.height = Math.max(220, Math.round((stage.clientWidth - 32) * cy / cx + 40)) + "px";
+  stage.style.height = Math.max(200, Math.round((stage.clientWidth - 2 * FIT_PAD) * cy / cx + 2 * FIT_PAD)) + "px";
+}
+// 맞춤 배율을 직접 계산: 슬라이드 원래 크기(EMU → px, 96dpi) 가 보이는 칸(.pptxv-viewport)에 꼭 들어가는 배율.
+// (뷰어 자체 zoomToFit 은 칸 크기가 바뀐 뒤에도 예전 크기로 계산해 전체화면에서 작게 남는 경우가 있었음)
+function fitScale() {
+  const vp = stage.querySelector(".pptxv-viewport");
+  if (!vp || !parser) return fit || 1;
+  const w = parser.slideSize.cx / 9525, h = parser.slideSize.cy / 9525;
+  const r = vp.getBoundingClientRect();          // 확대 중 생긴 스크롤 막대를 빼지 않은 칸 크기
+  const s = Math.min((r.width - 2 * FIT_PAD) / w, (r.height - 2 * FIT_PAD) / h);
+  return s > 0.02 ? s : (fit || 1);
 }
 function zoomUI() {
   $("zoomLv").textContent = Math.round(zoom * 100) + "%";
   $("zoomOut").disabled = zoom <= ZMIN; $("zoomIn").disabled = zoom >= ZMAX;
   $("fsCount").textContent = `${cur + 1} / ${count}` + (zoom > 1.01 ? ` · ${Math.round(zoom * 100)}%` : "");
 }
-function refit() {                              // 칸 크기가 바뀌면 다시 맞춤 배율을 재고, 지금 확대 배수를 다시 적용
+function refit() {                              // 칸 크기가 바뀌면 맞춤 배율을 다시 재고, 지금 확대 배수를 그대로 적용
   if (!pv) return;
   sizeStage();
-  pv.zoomToFit(); fit = pv.getZoom() || 1;
-  if (zoom > 1.001) pv.setZoom(fit * zoom);
-  zoomUI(); scheduleHL();
+  requestAnimationFrame(() => {
+    fit = fitScale();
+    pv.setZoom(fit * zoom);
+    zoomUI(); scheduleHL();
+  });
 }
 function setZoom(z) {
   if (!pv) return;
   z = Math.min(ZMAX, Math.max(ZMIN, z));
-  if (Math.abs(z - zoom) < 0.001) return;
-  zoom = z;
-  if (zoom <= 1.001) { zoom = 1; pv.zoomToFit(); fit = pv.getZoom() || fit; } else pv.setZoom(fit * zoom);
+  if (Math.abs(z - zoom) < 0.001 && z !== 1) return;
+  zoom = z <= 1.001 ? 1 : z;
+  if (zoom === 1) fit = fitScale();               // '맞춤'은 언제나 지금 칸 크기로 다시 계산
+  pv.setZoom(fit * zoom);
   zoomUI(); scheduleHL();
 }
 async function toggleFull() {
@@ -384,7 +400,7 @@ function afterFull() {
   $("fullBtn").setAttribute("aria-label", lb); $("fullBtn").title = lb;
   document.body.style.overflow = viewer.classList.contains("full") ? "hidden" : "";
   zoom = 1;
-  setTimeout(refit, 120);
+  refit(); setTimeout(refit, 150); setTimeout(refit, 500);   // 전체화면 전환 애니메이션이 끝난 뒤에도 다시 맞춤
 }
 
 // ── 전체화면 ⋮ 메뉴 ─────────────────────────────────────────
@@ -535,7 +551,11 @@ stage.addEventListener("touchend", (e) => {
   const dx = e.changedTouches[0].clientX - sx; sx = null;
   if (Math.abs(dx) > 50) go(cur + (dx < 0 ? 1 : -1));
 }, { capture: true });
-let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(refit, 200); });
+let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(refit, 150); });
+// 칸 크기가 바뀌면(결과 칸 열림·폰 회전·주소창 접힘 등) 자동으로 다시 맞춤
+if ("ResizeObserver" in window) {
+  let ro; new ResizeObserver(() => { clearTimeout(ro); ro = setTimeout(refit, 80); }).observe(stage);
+}
 
 // ── 앱 설치 (2026-10-20 사용자 요청: 크롬 메뉴 설치가 제대로 안 돼 화면 안 설치 버튼) ─────────
 // 크롬·엣지·삼성 인터넷: beforeinstallprompt 로 받은 설치 창을 버튼에서 띄운다. 아이폰·아이패드는 직접 띄울 수 없어 방법을 보여 준다.
@@ -594,7 +614,7 @@ async function openShared() {
 // 에이전트·시험용 조작 (headless): window.pptxViewer.search("매출") 등
 window.pptxViewer = { open, search, go, setZoom, toggleFull, menu: menuAct, openFind, get viewer() { return pv; },
   get state() { return { slide: cur, count, query, hits: hits.map((h) => h.slideIndex), zoom: +zoom.toFixed(2), full: isFull(),
-    highlighted: hlCount, marks: CSS.highlights?.get("pv-hit")?.size ?? 0 }; } };
+    highlighted: hlCount, marks: CSS.highlights?.get("pv-hit")?.size ?? 0, fit: +fit.toFixed(3), fitNow: +fitScale().toFixed(3) }; } };
 
 const bin = Uint8Array.from(atob(SAMPLE_B64), (c) => c.charCodeAt(0));
 openShared().then((got) => { if (!got) open(bin, "예시 발표자료"); });
