@@ -60,6 +60,13 @@ button:disabled { opacity: .45; cursor: default; }
 .more svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .more .ico-exit, .viewer:fullscreen .more .ico-enter, .viewer.full .more .ico-enter { display: none; }
 .viewer:fullscreen .more .ico-exit, .viewer.full .more .ico-exit { display: block; }
+.fssearch { display: none; }
+.viewer:fullscreen .fssearch:not([hidden]), .viewer.full .fssearch:not([hidden]) { display: flex; gap: 6px; align-items: center; position: absolute; z-index: 6;
+  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 54px); left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
+.fssearch input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); min-height: 40px; }
+.fssearch button { min-height: 40px; padding: 6px 10px; }
+.fssearch .hitn { font-family: var(--f-num); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .fsbar .count { background: rgb(0 0 0 / .55); color: #fff; border-radius: 99px; padding: 6px 12px; font-size: 13px; }
 .more { width: 44px; height: 44px; min-height: 0; padding: 0; border-radius: 50%; border: 0;
   background: rgb(0 0 0 / .55); color: #fff; font-size: 22px; line-height: 1; align-items: center; justify-content: center; }
@@ -122,13 +129,17 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
     </div>
     <div class="fsbar" id="fsbar">
       <span class="count" id="fsCount">– / –</span>
+      <button class="more" id="fsFindBtn" type="button" aria-label="찾기" title="찾기">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      </button>
       <button class="more fs" id="fullBtn" type="button" aria-label="전체화면" title="전체화면">
         <svg class="ico-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
         <svg class="ico-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
       </button>
       <button class="more" id="moreBtn" type="button" aria-label="메뉴" aria-haspopup="menu" aria-expanded="false">⋮</button>
       <div class="menu" id="menu" role="menu" hidden>
-        <button type="button" role="menuitem" data-act="search">찾기로 돌아가기</button>
+        <button type="button" role="menuitem" data-act="find">찾기</button>
+        <button type="button" role="menuitem" data-act="search">찾기 결과 목록 보기 (전체화면 끝)</button>
         <button type="button" role="menuitem" data-act="hitPrev" data-hits>이전 결과</button>
         <button type="button" role="menuitem" data-act="hitNext" data-hits>다음 결과</button>
         <hr>
@@ -142,6 +153,14 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
         <button type="button" role="menuitem" data-act="exit">전체화면 끝</button>
       </div>
     </div>
+    <form class="fssearch" id="fsSearch" role="search" hidden>
+      <input id="fsQ" type="search" placeholder="슬라이드에서 찾기" autocomplete="off" enterkeyhint="search" aria-label="전체화면에서 찾기">
+      <button class="primary" type="submit">찾기</button>
+      <span class="hitn" id="fsHitN"></span>
+      <button type="button" id="fsHitPrev" aria-label="이전 결과">◀</button>
+      <button type="button" id="fsHitNext" aria-label="다음 결과">▶</button>
+      <button type="button" id="fsFindClose" aria-label="찾기 닫기">✕</button>
+    </form>
   </div>
   <section class="results" id="results" hidden>
     <h2><span id="resTitle"></span><span><button id="hitPrev" type="button">이전 결과</button> <button id="hitNext" type="button">다음 결과</button></span></h2>
@@ -189,6 +208,7 @@ function go(i) {
     showStatus("");
     $("count").textContent = `${cur + 1} / ${r.slideCount}`;
     $("fsCount").textContent = `${cur + 1} / ${r.slideCount}` + (zoom > 1.01 ? ` · ${Math.round(zoom * 100)}%` : "");
+    fsHitText();
     $("prev").disabled = cur === 0; $("next").disabled = cur === r.slideCount - 1;
     drawHits();
     for (const b of $("resList").querySelectorAll("button")) b.setAttribute("aria-current", String(+b.dataset.i === cur));
@@ -235,6 +255,7 @@ async function toggleFull() {
 }
 function afterFull() {
   closeMenu();
+  if (!isFull()) $("fsSearch").hidden = true;
   const lb = isFull() ? "전체화면 끝" : "전체화면";
   $("fullBtn").setAttribute("aria-label", lb); $("fullBtn").title = lb;
   document.body.style.overflow = viewer.classList.contains("full") ? "hidden" : "";
@@ -249,9 +270,26 @@ function openMenu() {
   $("menu").hidden = false; $("moreBtn").setAttribute("aria-expanded", "true");
   $("menu").querySelector("button:not([hidden])").focus();
 }
+// ── 전체화면 찾기 막대 ──────────────────────────────────────
+function fsHitText() {
+  const n = $("fsHitN");
+  if (!query) { n.textContent = ""; }
+  else if (!hits.length) { n.textContent = "없음"; }
+  else { const k = hits.findIndex((h) => h.slideIndex === cur); n.textContent = `${k < 0 ? "–" : k + 1}/${hits.length}`; }
+  $("fsHitPrev").disabled = $("fsHitNext").disabled = hits.length < 1;
+}
+function openFind() {
+  closeMenu();
+  $("fsSearch").hidden = false;
+  $("fsQ").value = query ? $("q").value : $("fsQ").value;
+  fsHitText(); $("fsQ").focus(); $("fsQ").select();
+}
+function closeFind() { $("fsSearch").hidden = true; $("fsFindBtn").focus(); }
+
 async function menuAct(act) {
   closeMenu();
-  if (act === "search") {                       // 전체화면을 끝내고 찾기 칸으로
+  if (act === "find") openFind();
+  else if (act === "search") {                       // 전체화면을 끝내고 찾기 칸으로
     if (isFull()) await toggleFull();
     $("q").focus(); $("q").select(); $("searchForm").scrollIntoView({ block: "start" });
   } else if (act === "hitPrev") stepHit(-1);
@@ -343,6 +381,17 @@ $("zoomIn").addEventListener("click", () => setZoom(zoom * 1.25));
 $("zoomOut").addEventListener("click", () => setZoom(zoom / 1.25));
 $("zoomFit").addEventListener("click", () => setZoom(1));
 $("fullBtn").addEventListener("click", toggleFull);
+$("fsFindBtn").addEventListener("click", (e) => { e.stopPropagation(); $("fsSearch").hidden ? openFind() : closeFind(); });
+$("fsSearch").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("q").value = $("fsQ").value;                 // 보통 화면 찾기 칸·결과 목록과 같이 맞춘다
+  await search($("fsQ").value);
+  fsHitText();
+});
+$("fsHitPrev").addEventListener("click", () => stepHit(-1));
+$("fsHitNext").addEventListener("click", () => stepHit(1));
+$("fsFindClose").addEventListener("click", closeFind);
+$("fsQ").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeFind(); } });
 $("moreBtn").addEventListener("click", (e) => { e.stopPropagation(); $("menu").hidden ? openMenu() : closeMenu(); });
 $("menu").addEventListener("click", (e) => { const b = e.target.closest("[data-act]"); if (b) menuAct(b.dataset.act); });
 document.addEventListener("click", (e) => { if (!$("menu").hidden && !e.target.closest("#fsbar")) closeMenu(); });
@@ -392,7 +441,7 @@ stage.addEventListener("touchend", (e) => {
 let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => go(cur), 200); });
 
 // 에이전트·시험용 조작 (headless): window.pptxViewer.search("매출") 등
-window.pptxViewer = { open, search, go, setZoom, toggleFull, menu: menuAct,
+window.pptxViewer = { open, search, go, setZoom, toggleFull, menu: menuAct, openFind,
   get state() { return { slide: cur, count: r?.slideCount || 0, query, hits: hits.map((h) => h.slideIndex), zoom: +zoom.toFixed(2), full: isFull() }; } };
 
 const bin = Uint8Array.from(atob(SAMPLE_B64), (c) => c.charCodeAt(0));
