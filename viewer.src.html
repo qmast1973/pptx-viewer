@@ -589,7 +589,10 @@ function endPinchLive(commit) {
   if (L && commit) { zoomAt(L.z, L.start.x, L.start.y, L.mid.x, L.mid.y); scheduleHL(); }
 }
 
+// 슬라이드 뷰어 안쪽 라이브러리(pptx-vanilla-viewer)도 자기 핀치·밀기 처리를 따로 갖고 있어(핀치마다 슬라이드를 다시 그림) 같이 반응하면 서로 방해한다.
+// 슬라이드 칸의 터치는 여기서만 처리하고 안쪽으로 전달하지 않는다 (2026-10-21 사용자: 핀치 한 번에 3~5%만 확대되는 문제의 원인).
 stage.addEventListener("touchstart", (e) => {
+  e.stopPropagation();
   if (e.touches.length === 2) {
     e.preventDefault();
     const m = touchMid(e.touches[0], e.touches[1]);
@@ -609,6 +612,7 @@ stage.addEventListener("touchstart", (e) => {
 }, { passive: false, capture: true });
 
 window.addEventListener("touchmove", (e) => {
+  if (stage.contains(e.target)) e.stopPropagation();
   if (!touchState) return;
   const vp = getVp();
   if (e.touches.length === 2 && touchState.mode === "pinch" && pinchLive) {
@@ -629,6 +633,7 @@ window.addEventListener("touchmove", (e) => {
 }, { passive: false, capture: true });
 
 const endTouch = (e) => {
+  if (stage.contains(e.target)) e.stopPropagation();
   if (!touchState) return;
   const vp = getVp();
 
@@ -712,6 +717,10 @@ $("installHelpClose").addEventListener("click", () => $("installHelp").close());
 // 서비스 워커: 앱 파일 보관(빠른 실행·인터넷 없이 열기) + 공유로 받은 파일 전달. 새 판이 오면 다음 실행부터 적용
 if (hasManifest && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "127.0.0.1" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
+  // 이미 열려 있던 앱(홈 화면 앱을 닫지 않고 다시 연 경우)은 옛 코드로 계속 돌아가므로, 새 판이 넘겨받으면 한 번 다시 불러온다 (손가락이 닿아 있는 동안은 제외)
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (!touchState) location.reload(); }, { once: true });
+  }
 }
 // 설치한 앱으로 .pptx 를 열었을 때 (PC: 파일을 두 번 누르기·연결 프로그램)
 if ("launchQueue" in window) {
