@@ -16,7 +16,7 @@
 <style>
 /* 레이아웃 (2026-10-20, christophervr.github.io/ooxml/pptx 의 앱 화면 참고):
    위 제목줄(파일 이름·찾기·열기) → [가운데: 슬라이드(왼쪽 썸네일 포함) + 아래 상태줄 | 오른쪽 찾기 결과]
-   폰(900px 미만)은 한 줄: 제목줄 → 슬라이드 → 상태줄 → 찾기 결과.
+   폰(900px 미만)은 한 줄: 제목줄 → 슬라이드 → 썸네일(가로 줄) → 상태줄 → 찾기 결과.
    슬라이드는 오픈소스 pptx-vanilla-viewer(Apache-2.0)가 진짜 HTML 글자로 그린다. */
 :root {
   --bg: #16181c; --chrome: #1f2227; --panel: #24282e; --raise: #2c3138; --line: #363b43;
@@ -76,10 +76,12 @@ dialog.help .row { display: flex; justify-content: flex-end; }
 
 /* ── 슬라이드 칸 (전체화면 대상) ── */
 .viewer { display: flex; flex-direction: column; position: relative; flex: 1; min-height: 0; }
-.stage { position: relative; flex: 1; min-height: 240px; background: var(--canvas); touch-action: none; user-select: none; -webkit-user-select: none; }
-.stage, .stage * { touch-action: none !important; }
+.stage { position: relative; flex: 1; min-height: 240px; background: var(--canvas); touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; }
+/* 슬라이드 보는 칸만 손가락 움직임을 전부 이 화면이 처리한다(핀치·밀기). 칸 바깥(.stage)까지 none 이면 안쪽 썸네일 목록이 못 밀리므로 여기만 막는다 */
+.stage .pptxv-viewport, .stage .pptxv-viewport * { touch-action: none !important; }
+.stage .pptxv-thumbs, .stage .pptxv-thumbs * { touch-action: pan-x pan-y !important; }   /* 썸네일 줄은 손가락으로 밀어 넘길 수 있게 */
 .status { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; color: #fff; font-size: 14px; text-align: center; padding: 20px; background: var(--canvas); }
-/* 오픈소스 뷰어 안쪽 손질: 발표자 노트 줄 숨김, 썸네일 줄 색 맞춤, 폰에서는 썸네일 줄 숨김 */
+/* 오픈소스 뷰어 안쪽 손질: 발표자 노트 줄 숨김, 썸네일 줄 색 맞춤 (폰은 아래 가로 줄, 전체화면은 숨김) */
 /* 뷰어 뿌리 상자를 칸 전체에 고정 (폰에서는 스스로 높이를 잡지 못해 42px 로 쪼그라들었음) */
 .stage > .pptxv { position: absolute; inset: 0; width: auto !important; height: auto !important; --pptx-accent: var(--accent); }
 .stage .pptxv-notes { display: none !important; }
@@ -157,7 +159,14 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
   .app, .app.nores { display: flex; flex-direction: column; }
   .main { order: 1; }
   .results { order: 3; border-left: 0; border-top: 1px solid var(--line); }
-  .stage .pptxv-thumbs { display: none; }
+  /* 폰 보통 화면: 썸네일은 슬라이드 아래 (2026-10-21 사용자 요청, 전체화면에서는 위 규칙으로 숨김).
+     50장 미만: 가로 한 줄(높이 THUMB_H 104px). 50장 이상은 라이브러리가 세로 목록으로만 그려서(가상 스크롤) 세로로 미는 칸(THUMB_H_BIG 200px). */
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-body { flex-direction: column; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs { display: flex !important; order: 2; width: auto !important; height: 104px; border-right: 0; border-top: 1px solid var(--line); flex-direction: row; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs:not(.pptxv-thumbs-virtualized) .pptxv-thumbs-list { flex: 1; overflow-x: auto !important; overflow-y: hidden !important; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs:not(.pptxv-thumbs-virtualized) .pptxv-thumbs-window { flex-direction: row !important; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs-virtualized { height: 200px; flex-direction: column; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs-virtualized .pptxv-thumbs-list { flex: 1; overflow-y: auto !important; overflow-x: hidden !important; }
   .zoombar .ztxt { display: none; }
   /* 폰 보통 화면: 칸 높이는 sizeStage() 가 슬라이드 비율로 정한 값 그대로 (flex 로 늘이거나 줄이지 않음) */
   .viewer:not(.full):not(:fullscreen) .stage { flex: none; min-height: 160px; }
@@ -406,7 +415,7 @@ const $ = (id) => document.getElementById(id);
 const status = $("status"), stage = $("stage"), viewer = $("viewer");
 let parser = null, pv = null, count = 0, cur = 0, hits = [], hitPos = -1, query = "", hlCount = 0;
 let zoom = 1, fit = 1;                          // zoom 1 = 칸에 맞춤 (fit = 그때 뷰어의 실제 배율), 최대 5배
-const ZMIN = 1, ZMAX = 5, FIT_PAD = 12;
+const ZMIN = 1, ZMAX = 5, FIT_PAD = 12, THUMB_H = 104, THUMB_H_BIG = 200;   // 폰 썸네일 칸 높이 (CSS 와 같게): 50장 미만 가로 줄 / 이상 세로 목록
 
 // ── 마지막으로 연 파일 기억 (브라우저 IndexedDB, 기기 안에만 저장) ─────────
 let lastSaved = "", curName = "";
@@ -508,7 +517,7 @@ function isFull() { return document.fullscreenElement === viewer || viewer.class
 function sizeStage() {                          // 폰 보통 화면: 슬라이드 비율에 맞는 높이 / PC·전체화면: 남은 칸을 채움
   if (isFull() || innerWidth >= 900 || !parser) { stage.style.height = ""; return; }
   const { cx, cy } = parser.slideSize;
-  stage.style.height = Math.max(200, Math.round((stage.clientWidth - 2 * FIT_PAD) * cy / cx + 2 * FIT_PAD)) + "px";
+  stage.style.height = Math.max(200, Math.round((stage.clientWidth - 2 * FIT_PAD) * cy / cx + 2 * FIT_PAD)) + (stage.querySelector(".pptxv-thumbs-virtualized") ? THUMB_H_BIG : THUMB_H) + "px";
 }
 // 맞춤 배율을 직접 계산: 슬라이드 원래 크기(EMU → px, 96dpi) 가 보이는 칸(.pptxv-viewport)에 꼭 들어가는 배율.
 // (뷰어 자체 zoomToFit 은 칸 크기가 바뀐 뒤에도 예전 크기로 계산해 전체화면에서 작게 남는 경우가 있었음)
@@ -651,7 +660,10 @@ function pick(f) {
 $("fileIn").addEventListener("change", (e) => { pick(e.target.files[0]); e.target.value = ""; });
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => { e.preventDefault(); pick(e.dataTransfer?.files?.[0]); });
-$("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("q").value); $("q").blur(); });
+$("searchForm").addEventListener("submit", (e) => { e.preventDefault(); clearTimeout(liveT); search($("q").value); $("q").blur(); });
+// 글자를 칠 때마다 바로 찾기 (2026-10-21 사용자 요청, 한글 조합 중에도 / 짧게 기다렸다 한 번만)
+let liveT;
+$("q").addEventListener("input", () => { clearTimeout(liveT); liveT = setTimeout(() => search($("q").value), 200); });
 $("prev").addEventListener("click", () => go(cur - 1));
 $("next").addEventListener("click", () => go(cur + 1));
 $("zoomIn").addEventListener("click", () => setZoom(zoom * 1.25));
@@ -664,6 +676,10 @@ $("fsSearch").addEventListener("submit", async (e) => {
   $("q").value = $("fsQ").value;                 // 보통 화면 찾기 칸·결과 목록과 같이 맞춘다
   await search($("fsQ").value);
   fsHitText();
+});
+$("fsQ").addEventListener("input", () => {
+  clearTimeout(liveT);
+  liveT = setTimeout(async () => { $("q").value = $("fsQ").value; await search($("fsQ").value); fsHitText(); }, 200);
 });
 $("fsHitPrev").addEventListener("click", () => stepHit(-1));
 $("fsHitNext").addEventListener("click", () => stepHit(1));
@@ -728,6 +744,7 @@ function endPinchLive(commit) {
 // 슬라이드 칸의 터치는 여기서만 처리하고 안쪽으로 전달하지 않는다 (2026-10-21 사용자: 핀치 한 번에 3~5%만 확대되는 문제의 원인).
 stage.addEventListener("touchstart", (e) => {
   e.stopPropagation();
+  if (e.target.closest?.(".pptxv-thumbs")) { touchState = null; return; }   // 썸네일 줄은 브라우저가 밀기(스크롤)·누르기를 처리
   if (e.touches.length === 2) {
     e.preventDefault();
     const m = touchMid(e.touches[0], e.touches[1]);
@@ -807,6 +824,10 @@ const endTouch = (e) => {
 window.addEventListener("touchend", endTouch, { capture: true });
 window.addEventListener("touchcancel", endTouch, { capture: true });
 
+// 썸네일 줄: 안쪽 라이브러리가 썸네일 위의 손가락 포인터를 따로 붙잡아(끌어 옮기기용) 손가락으로 밀어도 목록이 안 움직였다 → 손가락 포인터는 전달하지 않고 누르기(click)만 남긴다
+for (const ev of ["pointerdown", "pointermove", "pointerup"]) {
+  stage.addEventListener(ev, (e) => { if (e.pointerType === "touch" && e.target.closest?.(".pptxv-thumbs")) e.stopPropagation(); }, true);
+}
 // iOS 사파리의 기본 제스처 줌만 막는다 (핀치 자체는 위 touch 이벤트로 처리)
 for (const ev of ["gesturestart", "gesturechange", "gestureend"]) stage.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(refit, 150); });
