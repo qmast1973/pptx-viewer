@@ -13512,6 +13512,8 @@ const endTouch = (e) => {
   if (e.touches.length === 0) touchState = null;
 };
 
+// 뷰어 자체의 핀치·좌우 밀기 처리(25% 단계 확대)가 같이 반응하지 않게, 슬라이드 칸 안의 터치는 아래로 전달하지 않는다
+for (const ev of ["touchstart", "touchmove", "touchend", "touchcancel"]) stage.addEventListener(ev, (e) => e.stopPropagation(), { capture: true, passive: false });
 window.addEventListener("touchend", endTouch, { capture: true });
 window.addEventListener("touchcancel", endTouch, { capture: true });
 
