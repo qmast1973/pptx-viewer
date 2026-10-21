@@ -147,14 +147,11 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
   .app, .app.nores { display: flex; flex-direction: column; }
   .main { order: 1; }
   .results { order: 3; border-left: 0; border-top: 1px solid var(--line); }
-  /* 폰 보통 화면: 썸네일은 슬라이드 아래 (2026-10-21 사용자 요청, 전체화면에서는 위 규칙으로 숨김).
-     50장 미만: 가로 한 줄(높이 THUMB_H 104px). 50장 이상은 라이브러리가 세로 목록으로만 그려서(가상 스크롤) 세로로 미는 칸(THUMB_H_BIG 200px). */
-  .viewer:not(.full):not(:fullscreen) .stage .pptxv-body { flex-direction: column; }
-  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs { display: flex !important; order: 2; width: auto !important; height: 104px; border-right: 0; border-top: 1px solid var(--line); flex-direction: row; }
-  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs:not(.pptxv-thumbs-virtualized) .pptxv-thumbs-list { flex: 1; overflow-x: auto !important; overflow-y: hidden !important; }
-  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs:not(.pptxv-thumbs-virtualized) .pptxv-thumbs-window { flex-direction: row !important; }
-  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs-virtualized { height: 200px; flex-direction: column; }
-  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs-virtualized .pptxv-thumbs-list { flex: 1; overflow-y: auto !important; overflow-x: hidden !important; }
+  /* 폰 보통 화면: 썸네일은 PC(크롬)처럼 슬라이드 왼쪽 세로 줄 (2026-10-21 사용자 요청: 아래 가로 줄 → 크롬과 같게). 폭 THUMB_W 84px, 세로로 밀어 넘김. 전체화면에서는 위 규칙으로 숨김.
+     라이브러리 자체 CSS 가 폰에서 썸네일을 display:none 하므로 flex !important 로 덮는다. */
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-body { flex-direction: row; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs { display: flex !important; width: 84px !important; flex: none; border-right: 1px solid var(--line); flex-direction: column; }
+  .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs-list { flex: 1; overflow-y: auto !important; overflow-x: hidden !important; padding: 6px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .zoombar .ztxt { display: none; }
   /* 폰 보통 화면: 칸 높이는 sizeStage() 가 슬라이드 비율로 정한 값 그대로 (flex 로 늘이거나 줄이지 않음) */
   .viewer:not(.full):not(:fullscreen) .stage { flex: none; min-height: 160px; }
@@ -13128,7 +13125,7 @@ const $ = (id) => document.getElementById(id);
 const status = $("status"), stage = $("stage"), viewer = $("viewer");
 let parser = null, pv = null, count = 0, cur = 0, hits = [], hitPos = -1, query = "", hlCount = 0;
 let zoom = 1, fit = 1;                          // zoom 1 = 칸에 맞춤 (fit = 그때 뷰어의 실제 배율), 최대 5배
-const ZMIN = 1, ZMAX = 5, FIT_PAD = 12, THUMB_H = 104, THUMB_H_BIG = 200;   // 폰 썸네일 칸 높이 (CSS 와 같게): 50장 미만 가로 줄 / 이상 세로 목록
+const ZMIN = 1, ZMAX = 5, FIT_PAD = 12, THUMB_W = 84, MIN_STAGE_H = 320;   // 폰 썸네일 줄 폭 (CSS 와 같게) / 칸 최소 높이(썸네일 목록이 밀릴 만큼)
 
 // ── 마지막으로 연 파일 기억 (브라우저 IndexedDB, 기기 안에만 저장) ─────────
 let lastSaved = "", curName = "";
@@ -13230,7 +13227,7 @@ function isFull() { return document.fullscreenElement === viewer || viewer.class
 function sizeStage() {                          // 폰 보통 화면: 슬라이드 비율에 맞는 높이 / PC·전체화면: 남은 칸을 채움
   if (isFull() || innerWidth >= 900 || !parser) { stage.style.height = ""; return; }
   const { cx, cy } = parser.slideSize;
-  stage.style.height = Math.max(200, Math.round((stage.clientWidth - 2 * FIT_PAD) * cy / cx + 2 * FIT_PAD)) + (stage.querySelector(".pptxv-thumbs-virtualized") ? THUMB_H_BIG : THUMB_H) + "px";
+  stage.style.height = Math.max(MIN_STAGE_H, Math.round((stage.clientWidth - THUMB_W - 2 * FIT_PAD) * cy / cx + 2 * FIT_PAD)) + "px";
 }
 // 맞춤 배율을 직접 계산: 슬라이드 원래 크기(EMU → px, 96dpi) 가 보이는 칸(.pptxv-viewport)에 꼭 들어가는 배율.
 // (뷰어 자체 zoomToFit 은 칸 크기가 바뀐 뒤에도 예전 크기로 계산해 전체화면에서 작게 남는 경우가 있었음)

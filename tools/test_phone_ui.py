@@ -1,8 +1,8 @@
 """폰 화면 시험 (헤드리스 Chrome 393×852, 소리 끔, 실제 입력 경로 CDP Input.dispatchTouchEvent).
 2026-10-21 사용자 요청 확인용: 폰에서도 썸네일(슬라이드 아래), 전체화면에서는 숨김, 글자를 칠 때마다 바로 찾기.
   python tools/test_phone_ui.py [폴더]      (큰 덱 시험용 .pptx 는 python-pptx 가 있으면 임시로 만든다)
-기대: 보통 화면 썸네일 줄 104px(4장·20장), 150장은 세로 목록 200px / 전체화면 썸네일 없음 / 한 글자 칠 때마다 결과가 바뀌고 입력칸 초점 유지 /
-      20장 덱 썸네일 줄을 가로로 밀면 줄만 움직이고 쪽은 그대로 / 썸네일 누르면 그 쪽으로 이동."""
+기대: 보통 화면 썸네일 = 크롬(PC)처럼 슬라이드 왼쪽 세로 줄 폭 84px / 전체화면 썸네일 없음 / 한 글자 칠 때마다 결과가 바뀌고 입력칸 초점 유지 /
+      20장·150장 덱 썸네일 줄을 세로로 밀면 줄만 움직이고 쪽은 그대로 / 썸네일 누르면 그 쪽으로 이동."""
 import asyncio, json, urllib.request, subprocess, tempfile, sys, shutil, os
 from pathlib import Path
 import websockets
@@ -80,11 +80,11 @@ async def main():
 
             def geo():
                 return ev("(()=>{const t=document.querySelector('.pptxv-thumbs');const r=t.getBoundingClientRect();"
-                          "return {disp:getComputedStyle(t).display,h:Math.round(r.height),w:Math.round(r.width)}})()")
+                          "return {disp:getComputedStyle(t).display,h:Math.round(r.height),w:Math.round(r.width),l:Math.round(r.left)}})()")
 
             await wait_count(4)
             g = await geo()
-            check("폰 보통 화면: 썸네일 줄이 보이고 가로 폭 가득, 높이 104", g['disp'] == 'flex' and g['h'] == 104 and g['w'] == 393, g)
+            check("폰 보통 화면: 썸네일이 왼쪽 세로 줄(폭 84, 높이 320 이상)", g['disp'] == 'flex' and g['w'] == 84 and g['l'] == 0 and g['h'] >= 320, g)
             await ev("document.querySelectorAll('.pptxv-thumb')[2].click()"); await asyncio.sleep(0.4)
             check("썸네일 누르면 그 쪽으로 이동", await ev("window.pptxViewer.state.slide") == 2)
             await ev("window.pptxViewer.go(0)"); await asyncio.sleep(0.3)
@@ -97,27 +97,26 @@ async def main():
             g = await geo()
             check("전체화면에서는 썸네일 숨김", g['disp'] == 'none', g)
             await ev("window.pptxViewer.toggleFull()"); await asyncio.sleep(1)
-            if 20 in decks:
-                await load(decks[20], 20)
-                g = await geo()
-                check("20장: 가로 줄 104", g['disp'] == 'flex' and g['h'] == 104, g)
+            async def swipe_test(c):
                 await ev("window.scrollTo(0,0)"); await asyncio.sleep(0.3)
                 tr = await ev("(()=>{const r=document.querySelector('.pptxv-thumbs').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()")
                 s0 = await ev("window.pptxViewer.state.slide")
-                await touch('touchStart', [(tr[0] + 120, tr[1])])
+                await touch('touchStart', [(tr[0], tr[1] + 100)])
                 for i in range(1, 11):
-                    await touch('touchMove', [(tr[0] + 120 - 24 * i, tr[1])]); await asyncio.sleep(0.016)
+                    await touch('touchMove', [(tr[0], tr[1] + 100 - 24 * i)]); await asyncio.sleep(0.016)
                 await touch('touchEnd', []); await asyncio.sleep(0.6)
-                sc = await ev("document.querySelector('.pptxv-thumbs-list').scrollLeft")
-                check("20장: 썸네일 줄을 가로로 밀면 줄만 움직이고 쪽은 그대로", sc > 50 and await ev("window.pptxViewer.state.slide") == s0, sc)
+                sc = await ev("document.querySelector('.pptxv-thumbs-list').scrollTop")
+                check(f"{c}장: 썸네일 줄을 세로로 밀면 줄만 움직이고 쪽은 그대로", sc > 50 and await ev("window.pptxViewer.state.slide") == s0, sc)
+            if 20 in decks:
+                await load(decks[20], 20)
+                await swipe_test(20)
             if 150 in decks:
                 await load(decks[150], 150)
                 g = await geo()
-                check("150장: 세로 목록 200", g['disp'] == 'flex' and g['h'] == 200, g)
-                st = await ev("(()=>{const s=document.getElementById('stage').getBoundingClientRect(),v=document.querySelector('.pptxv-viewport').getBoundingClientRect();return [Math.round(s.height),Math.round(v.height)]})()")
-                check("150장: 슬라이드 칸 = 슬라이드 비율 높이 + 200", st[0] - st[1] == 200, st)
-                await ev("document.querySelectorAll('.pptxv-thumb')[5].click()"); await asyncio.sleep(0.4)
-                check("150장: 썸네일 누르면 그 쪽으로 이동", await ev("window.pptxViewer.state.slide") == 5)
+                check("150장: 왼쪽 세로 줄", g['disp'] == 'flex' and g['w'] == 84 and g['l'] == 0, g)
+                await swipe_test(150)
+                await ev("document.querySelectorAll('.pptxv-thumb')[3].click()"); await asyncio.sleep(0.4)
+                check("150장: 썸네일 누르면 그 쪽으로 이동", await ev("window.pptxViewer.state.slide") == 3)
     finally:
         proc.terminate(); srv.terminate(); await asyncio.sleep(1)
         shutil.rmtree(prof, ignore_errors=True); shutil.rmtree(work, ignore_errors=True)
