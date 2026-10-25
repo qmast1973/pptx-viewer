@@ -1,7 +1,7 @@
 // 앱 설치용 서비스 워커 (tools/build.py 가 VERSION 을 채워 sw.js 로 만든다 — sw.js 는 직접 고치지 않음)
 // - 앱 파일을 보관해 두고 빠르게·인터넷 없이도 연다. 화면(index.html)은 인터넷이 되면 항상 새 판을 먼저 받는다
 // - 다른 앱(카톡 등)에서 '공유'로 보낸 .pptx 를 받아 화면으로 넘긴다 (manifest share_target)
-const VERSION = "8d43b7ccfd66";
+const VERSION = "3a0b376ee062";
 const CACHE = "pv-" + VERSION, SHARE = "pv-share";
 const CORE = ["./", "index.html", "manifest.webmanifest", "vendor/pptx-vanilla-viewer.bundle.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];

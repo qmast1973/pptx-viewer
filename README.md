@@ -19,6 +19,8 @@
 
 - **앱 설치**(2026-10-20): 제목줄 **앱 설치** 버튼 → 크롬·엣지·삼성 인터넷은 설치 창, 아이폰·아이패드는 Safari '홈 화면에 추가' 안내, 그 밖은 브라우저 메뉴 안내. 설치하면 앱 창으로 열리고(manifest.webmanifest), 앱 파일을 보관해 인터넷 없이도 열림(sw.js). 설치한 앱으로 PC 에서 .pptx 를 바로 열기(file_handlers), 폰에서 카톡 등 → **공유 → 슬라이드 찾기**로 파일 받기(share_target)
 
+- **안드로이드 앱(APK)**(2026-10-25): `android/` 의 작은 WebView 앱이 이 웹앱을 안에 담아 인터넷 없이 열고, 파일 앱의 .pptx 를 눌렀을 때 **연결 프로그램**으로 나옴(공유도 됨). `.github/workflows/android.yml` 이 main 에 웹 화면·`android/` 가 바뀔 때마다 APK 를 만들어 Releases `android-latest` 에 올리고, 웹앱의 'APK 받기' 링크(`releases/latest/download/pptx-viewer.apk`)가 그걸 가리킴. 서명 키는 저장소 시크릿 `ANDROID_KEYSTORE_BASE64`·`ANDROID_KEYSTORE_PASSWORD` (별칭 `pv`) — 같은 키여야 덮어 설치(업데이트)됨. 앱 안에는 웹 화면이 들어 있어서 웹이 바뀌면 새 APK 를 받아 설치해야 반영됨
+
 ## 구성
 | 파일 | 내용 |
 |---|---|
