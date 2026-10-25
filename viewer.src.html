@@ -160,6 +160,9 @@ mark { background: var(--mark); color: #1d2630; border-radius: 2px; padding: 0 1
   .viewer:not(.full):not(:fullscreen) .stage .pptxv-body { flex-direction: row; }
   .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs { display: flex !important; width: 84px !important; flex: none; border-right: 1px solid var(--line); flex-direction: column; }
   .viewer:not(.full):not(:fullscreen) .stage .pptxv-thumbs-list { flex: 1; overflow-y: auto !important; overflow-x: hidden !important; padding: 6px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  /* 폰 보통 화면(전체화면·확대 아님): 슬라이드 위에서 위아래로 밀면 페이지가 스크롤된다 (아래 결과·설명글·링크가 보이게). 좌우 밀기·핀치는 그대로 이 화면이 처리 */
+  .viewer:not(.full):not(:fullscreen):not(.zoomed) .stage .pptxv-viewport,
+  .viewer:not(.full):not(:fullscreen):not(.zoomed) .stage .pptxv-viewport * { touch-action: pan-y !important; }
   .zoombar .ztxt { display: none; }
   /* 폰 보통 화면: 칸 높이는 sizeStage() 가 슬라이드 비율로 정한 값 그대로 (flex 로 늘이거나 줄이지 않음) */
   .viewer:not(.full):not(:fullscreen) .stage { flex: none; min-height: 160px; }
@@ -394,6 +397,7 @@ function fitScale() {
   return s > 0.02 ? s : (fit || 1);
 }
 function zoomUI() {
+  viewer.classList.toggle("zoomed", zoom > 1.01);
   $("zoomLv").textContent = Math.round(zoom * 100) + "%";
   $("zoomOut").disabled = zoom <= ZMIN; $("zoomIn").disabled = zoom >= ZMAX;
   $("fsCount").textContent = `${cur + 1} / ${count}` + (zoom > 1.01 ? ` · ${Math.round(zoom * 100)}%` : "");
