@@ -12,6 +12,8 @@ src = (ROOT / "viewer.src.html").read_text(encoding="utf-8")
 bundle = (ROOT / "vendor" / "pptx-browser.bundle.js").read_text(encoding="utf-8")
 pvv = (ROOT / "vendor" / "pptx-vanilla-viewer.bundle.js").read_text(encoding="utf-8")
 assert "</script" not in bundle and "</script" not in pvv and src.count(PVV_TAG) == 1
+import hashlib as _h
+src = src.replace("__BUILD__", _h.sha256(src.encode()).hexdigest()[:7])
 src = src.replace("__BUNDLE__", bundle)
 b64 = base64.b64encode((ROOT / "sample" / "예시_발표.pptx").read_bytes()).decode()
 body = src.replace("__SAMPLE_B64__", b64)
