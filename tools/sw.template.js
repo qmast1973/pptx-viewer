@@ -32,7 +32,7 @@ self.addEventListener("fetch", (e) => {
   }
   if (req.method !== "GET") return;
   if (req.mode === "navigate") {                 // 화면: 인터넷 먼저, 안 되면 보관본
-    e.respondWith(fetch(req).then((res) => { const cp = res.clone(); caches.open(CACHE).then((c) => c.put("index.html", cp)); return res; })
+    e.respondWith(fetch(req, { cache: "no-cache" }).then((res) => { const cp = res.clone(); caches.open(CACHE).then((c) => c.put("index.html", cp)); return res; })
       .catch(() => caches.match("index.html", { ignoreSearch: true }).then((r) => r || caches.match("./"))));
     return;
   }
